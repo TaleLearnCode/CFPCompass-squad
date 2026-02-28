@@ -1,0 +1,7 @@
+{
+  "version": "1.0",
+  "universe": "Alien (1979)",
+  "max_agents": 25,
+  "allow_overflow": true,
+  "overflow_strategy": ["diegetic_expansion", "thematic_promotion", "structural_mirroring"]
+}
