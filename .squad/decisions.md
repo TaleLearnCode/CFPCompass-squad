@@ -130,3 +130,89 @@ _Maintained by Scribe. Agents write to `.squad/decisions/inbox/` — Scribe merg
 - Requirements are living — expect refinement as team learns during development
 
 ---
+
+## Requirements v3 Update — Data Model, Tracking States, International Standards
+
+**Date:** 2026-02-28  
+**Author:** Brett (Requirements Analyst)  
+**Status:** Merged into requirements.md — guidance for implementation teams
+
+---
+
+### Summary
+
+Requirements advanced from v2 → v3 with seven major improvements:
+
+1. **CFP Data Model Expansion (Feature 2.1)** — 30+ fields in Event Details, CFP Details, Event Scheduling, Expense Coverage, Categorization
+2. **Speaker Tracking Status Flow (Feature 1.3)** — 3-state tracking: Interested → Submitted → Accepted (replaced "favorites" terminology)
+3. **Geographic Filters (Feature 1.2)** — UN M.49 world region, ISO 3166-1 country, ISO 3166-2 subdivision filters
+4. **Organizer Edit Capability (Story 2.1.3)** — Organizers can edit Pending/Rejected submissions before admin approval
+5. **Admin Reconsideration Flow (Stories 2.2.4, 2.2.5)** — Organizer requests re-review; admin sees "Reconsidering" badge
+6. **Passkeys Evaluation Note (Epic 3)** — Architecture decision flagged for Dallas/Ripley (WebAuthn/FIDO2 vs. password)
+7. **APIM Infrastructure Note (Epic 5)** — Architecture decision flagged for Dallas/Parker (Azure API Management fronting all APIs)
+
+Feature count: 16 → 17
+
+---
+
+### Impact by Team
+
+**Ripley (Backend):**
+- Database schema expansion: 30+ new CFP fields
+- ISO 3166-1/3166-2 country/subdivision validation
+- IANA Time Zone Database validation
+- UN M.49 world region auto-assignment via mapping table
+- User-CFP tracking table: status column (Interested, Submitted, Accepted)
+- Submission editing endpoint: status checks for Pending/Rejected (Reconsidering)
+- Reconsideration request endpoint; moderation queue includes reconsidering submissions
+- Decision needed: Passkeys (WebAuthn/FIDO2) vs. password-based auth
+- Decision needed: APIM rate limiting + key management vs. app-level implementation
+
+**Lambert (Frontend):**
+- Submission form: all 30+ new fields organized by group
+- Country/subdivision/time zone inputs with validation, searchable dropdowns
+- Speaker tracking dashboard: 3-state status (Interested, Submitted, Accepted) with filtering
+- "I've Submitted" and "I've Been Accepted" buttons
+- Edit flow for Pending/Rejected submissions accessible via confirmation email
+- "Request Reconsideration" button in rejection email and dashboard
+- "Reconsidering" badge visibility in admin moderation queue
+
+**Kane (Tester):**
+- Test ISO 3166-1/3166-2 validation (valid codes accepted, invalid rejected)
+- Test IANA time zone validation (canonical identifiers only)
+- Test UN M.49 world region auto-assignment (e.g., US states → "Northern America")
+- Test 3-state tracking transitions (Interested → Submitted → Accepted)
+- Test edit flow for Pending/Rejected submissions; verify Approved submissions cannot be edited
+- Test reconsideration flow end-to-end: rejection → request → edit → resubmit → admin re-review
+- Test combined geographic filters (world region + country + subdivision)
+
+**Dallas (Lead Developer):**
+- Architectural decision: Passkeys (WebAuthn/FIDO2) as primary auth, or password + OAuth?
+  - If passkeys: Azure AD B2C integration path available; Epic 3 stories will need AC updates
+  - If password retained: Note serves as "considered but deferred" for future reference
+- Architectural decision: Azure API Management (APIM) to front all APIs?
+  - If yes: APIM handles rate limiting (100 req/min read, 10 req/min write), key management, versioning, developer portal, analytics
+  - If no: App-level rate limiting/key management retained
+  - Both decisions block Epic 3 and Epic 5 implementation respectively
+
+**Parker (DevOps):**
+- Conditional APIM provisioning: If APIM decision is "yes," provision APIM instance via Terraform
+- APIM policies configured for rate limiting (read/write limits per Decision 3)
+- APIM policies for API versioning (already decided: `/api/v1/`)
+
+---
+
+### Decisions Needed
+
+| Decision | Owner | Impact | Urgency |
+|----------|-------|--------|---------|
+| Passkeys (WebAuthn/FIDO2) vs. password-based auth | Dallas, Ripley | Epic 3 (Account Registration) implementation | Blocks Epic 3 start |
+| APIM to front all APIs vs. app-level management | Dallas, Parker | Epic 5 (Public API) + infrastructure setup | Blocks Epic 5 start |
+
+---
+
+### Traceability
+
+All v3 changes marked in requirements.md with HTML comment: `<!-- Updated v3: [brief description] -->`
+
+---

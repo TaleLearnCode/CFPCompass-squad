@@ -101,3 +101,71 @@
 **Pattern Note:**
 - Inline `> ℹ️ Decision N (Resolved):` callouts added to affected stories for traceability — team can see the decision rationale without leaving the story.
 
+
+### 2026-02-28 — Requirements v3: Expanded Data Model, Speaker Tracking States, Standards Adoption
+
+**Task:** Chad Green provided a comprehensive change set for v3 requirements. Updated requirements.md with surgical edits covering data model expansion, speaker tracking flow, international standards, and architectural notes.
+
+**Key Changes Applied:**
+
+**1. CFP Data Model Expansion (Feature 2.1):**
+- Added comprehensive field set organized into logical groups: Event Details (12 fields including event type, time zone, logo, legal name, social links), CFP Details (5 fields including rich text description, speaker support email with visibility toggle), Event Scheduling (additional event dates repeater for meetups/user groups), Expense Coverage (4 booleans + free-text coverage details), Categorization (event category and topics as multi-select)
+- Adopted international standards: ISO 3166-1 (country codes), ISO 3166-2 (country subdivisions), IANA Time Zone Database (time zones), UN M.49 (world regions — auto-assigned by system based on country)
+- Added validation ACs: country/subdivision must be valid ISO codes, time zone must be canonical IANA identifier
+- UN M.49 world region is backend-derived, not user input
+
+**2. Speaker Tracking Status Flow (Feature 1.3):**
+- Replaced "Favorites" terminology with "Personal CFP Tracking" and "Mark Interest"
+- Introduced 3-state tracking: Interested → Submitted → Accepted
+- Story 1.3.1: Mark Interest (was "Favorite")
+- Story 1.3.2 (NEW): Track CFP Submission Status — speaker marks "I've Submitted"
+- Story 1.3.3 (NEW): Track CFP Acceptance Status — speaker marks "I've Been Accepted"
+- Story 1.3.4: View My Tracked CFPs (was "View My Favorites") — now includes status filtering
+- Updated Epic 4 deadline reminders to trigger on Interested or Submitted status
+
+**3. Discovery Filtering — Geographic Standards (Feature 1.2):**
+- Added UN M.49 World Region filter (e.g., "Northern America", "Western Europe")
+- Added Country filter (ISO 3166-1)
+- Added Country Division/State/Province filter (ISO 3166-2)
+- ACs clarify filters are combinable and use the backend-assigned world region mapping
+
+**4. Organizer Submission Editing (Feature 2.1.3):**
+- New Story 2.1.3: Organizer can edit submissions in "Pending Review" or "Rejected (Reconsidering)" status
+- Approved submissions cannot be edited (contact admin required)
+
+**5. Admin Reconsideration Flow (Feature 2.2):**
+- Story 2.2.3: Updated rejection email to include "Request Reconsideration" button/link
+- Story 2.2.4 (NEW): Organizer requests reconsideration → status changes to "Rejected (Reconsidering)" → submission becomes editable → back in admin queue with "Reconsidering" badge
+- Story 2.2.5 (NEW): Admin reviews resubmitted CFP after reconsideration
+
+**6. Authentication — Passkeys Evaluation (Epic 3):**
+- Added architecture note at Epic 3 opening: Passkey-based auth (WebAuthn/FIDO2) should be evaluated as primary mechanism. Better UX, phishing-resistant. Decision deferred to Dallas/Ripley. Architecture must not assume password-only. OAuth/social login remains supported.
+
+**7. API Infrastructure — Azure API Management (Epic 5):**
+- Added infrastructure note at Epic 5 opening: All APIs fronted by Azure API Management (APIM). APIM handles rate limiting, API key management, versioning, developer portal, analytics. Arch decision for Dallas/Parker. Decision 3 rate limits remain target; APIM is enforcement layer.
+
+**8. Metadata Updates:**
+- Version: v2 → v3
+- Features: 16 → 17 (added Story 1.3.2, 1.3.3, 2.1.3, 2.2.4, 2.2.5)
+- Last Updated: 2026-02-28
+
+**Patterns Applied:**
+- Surgical edits only — no wholesale section rewrites where not needed
+- Added `<!-- Updated v3: [brief description] -->` HTML comment markers at Feature 2.1, Feature 2.2, Feature 1.2, Feature 1.3, Epic 3, Epic 5 for traceability
+- Inline validation ACs added for ISO/IANA standards to ensure testability
+- Maintained Given/When/Then structure for all new ACs
+- Updated cross-references (e.g., "favorites" → "tracked CFPs", "favorited" → "marked as Interested/Submitted")
+
+**Standards Adopted:**
+- **ISO 3166-1 alpha-2** — 2-letter country codes (e.g., US, DE, FR)
+- **ISO 3166-2** — Country subdivision codes (e.g., US-CA for California)
+- **IANA Time Zone Database** — Canonical time zone identifiers (e.g., "America/Chicago", "Europe/Berlin")
+- **UN M.49** — World region classification (auto-assigned from country code, not user input)
+
+**Impact:**
+- Ripley, Lambert: Data model now comprehensive; database schema and API contracts must reflect all new fields + standards enforcement
+- Kane: New validation tests required for ISO 3166, IANA time zone validation
+- Dallas: Passkeys vs. password architecture decision needed before Feature 3.1 implementation starts
+- Parker: APIM integration decision needed before Epic 5 (API) work begins
+- Total feature count raised to **17** (from 16 in v2)
+

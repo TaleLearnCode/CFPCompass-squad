@@ -1,9 +1,10 @@
 # CFP Compass — Requirements Breakdown
 
-**Last Updated:** 2026-02-28 v2  
+**Last Updated:** 2026-02-28  
+**Version:** v3  
 **Owner:** Brett (Requirements Analyst)  
 **Project:** CFP Compass — .NET 10 / Azure web application aggregating open Calls for Papers  
-**Features:** 16  
+**Features:** 17
 
 ---
 
@@ -66,7 +67,9 @@
 
 ### Feature 1.2: Filtering & Sorting
 
-**Description:** Allow speakers to filter CFPs by topic, location, deadline range, and format; sort by deadline, event date, or recently added.
+<!-- Updated v3: Added UN M.49 world region, country, and country subdivision filters -->
+
+**Description:** Allow speakers to filter CFPs by topic, location (world region, country, country subdivision), deadline range, and format; sort by deadline, event date, or recently added.
 
 #### User Story 1.2.1: Filter CFPs by Topic
 
@@ -84,15 +87,24 @@
 #### User Story 1.2.2: Filter CFPs by Location & Format
 
 **As a** speaker  
-**I want to** filter CFPs by location (region/country) and format (in-person/virtual/hybrid)  
+**I want to** filter CFPs by location (world region, country, country subdivision) and format (in-person/virtual/hybrid)  
 **So that I can** find opportunities I can realistically attend or present at
 
 **Acceptance Criteria:**
 
 - **Given** I am on the CFP listing page
-- **When** I select a location filter (e.g., "North America", "Europe") and/or format (e.g., "Virtual")
-- **Then** the list shows only CFPs matching the selected location and format criteria
-- **And** filters are combinable with topic filters
+- **When** I select a world region filter (UN M.49 region, e.g., "Northern America", "Western Europe")
+- **Then** the list shows only CFPs whose event country maps to that UN M.49 region
+- **Given** I am on the CFP listing page
+- **When** I select a country filter (ISO 3166-1 country, e.g., "United States", "Germany")
+- **Then** the list shows only CFPs in that country
+- **Given** I am on the CFP listing page
+- **When** I select a country subdivision filter (ISO 3166-2 subdivision, e.g., "California", "Bavaria")
+- **Then** the list shows only CFPs in that subdivision
+- **Given** I am on the CFP listing page
+- **When** I select a format filter (e.g., "Virtual", "In-Person", "Hybrid")
+- **Then** the list shows only CFPs matching the selected format
+- **And** all location filters (world region, country, subdivision) and format filters are combinable with topic filters
 
 #### User Story 1.2.3: Sort CFPs
 
@@ -109,37 +121,70 @@
 
 ---
 
-### Feature 1.3: Favorites & Personal Tracking
+### Feature 1.3: Personal CFP Tracking
 
-**Description:** Authenticated users can favorite CFPs and view a personalized list of saved opportunities.
+<!-- Updated v3: Replaced "favorite" terminology with "interest"; added submission and acceptance tracking states -->
 
-#### User Story 1.3.1: Favorite a CFP
+**Description:** Authenticated users can mark CFPs as interested, track submission status, and record acceptances.
+
+#### User Story 1.3.1: Mark Interest in a CFP
 
 **As a** logged-in speaker  
-**I want to** mark a CFP as a favorite  
-**So that I can** easily return to it later
+**I want to** mark a CFP as interested  
+**So that I can** easily return to it later and track my engagement
 
 **Acceptance Criteria:**
 
 - **Given** I am logged in and viewing a CFP detail page or listing
-- **When** I click the "Favorite" button
-- **Then** the CFP is added to my favorites list
-- **And** the button state changes to "Unfavorite"
-- **And** I can unfavorite by clicking again
+- **When** I click the "Mark as Interested" button
+- **Then** the CFP is added to my tracked CFPs with status "Interested"
+- **And** the button state changes to "Remove Interest"
+- **And** I can remove interest by clicking again
 
-#### User Story 1.3.2: View My Favorites
+#### User Story 1.3.2: Track CFP Submission Status
+
+**As a** speaker  
+**I want to** mark that I have submitted a talk proposal to a CFP  
+**So that I can** track which CFPs I've applied to
+
+**Acceptance Criteria:**
+
+- **Given** I am logged in and viewing a CFP listing
+- **When** I click "I've Submitted"
+- **Then** that CFP is marked as "Submitted" in my personal dashboard
+- **Given** I view my dashboard
+- **When** I look at my tracked CFPs
+- **Then** each CFP shows one of: Interested / Submitted / Accepted
+
+#### User Story 1.3.3: Track CFP Acceptance Status
+
+**As a** speaker  
+**I want to** mark that I have been accepted to speak at an event  
+**So that I can** track my confirmed speaking engagements
+
+**Acceptance Criteria:**
+
+- **Given** I have previously marked a CFP as "Submitted"
+- **When** I receive acceptance and click "I've Been Accepted"
+- **Then** the CFP status on my dashboard updates to "Accepted"
+- **Given** I view my profile/dashboard
+- **When** I filter by "Accepted"
+- **Then** I see only CFPs where I have been accepted to speak
+
+#### User Story 1.3.4: View My Tracked CFPs
 
 **As a** logged-in speaker  
-**I want to** see all my favorited CFPs in one place  
+**I want to** see all my tracked CFPs in one place  
 **So that I can** review and manage my submission targets
 
 **Acceptance Criteria:**
 
 - **Given** I am logged in
-- **When** I navigate to "My Favorites"
-- **Then** I see a list of all CFPs I have favorited
-- **And** the list displays the same details as the public listing (event name, deadline, location, topics)
-- **And** I can remove CFPs from favorites directly from this page
+- **When** I navigate to "My Dashboard" or "My Tracked CFPs"
+- **Then** I see a list of all CFPs I have marked as Interested, Submitted, or Accepted
+- **And** the list displays the same details as the public listing (event name, deadline, location, topics) plus the tracking status
+- **And** I can filter by status: Interested / Submitted / Accepted
+- **And** I can remove CFPs from tracking directly from this page
 
 ---
 
@@ -183,7 +228,48 @@
 
 ### Feature 2.1: Organizer Submission Form
 
+<!-- Updated v3: Expanded data model with comprehensive event/CFP fields including ISO/IANA standards, expense coverage, categorization, and organizer editing capability -->
+
 **Description:** Public form allowing event organizers to submit new CFPs for admin review. No account required — organizers identify themselves via a contact email field only.
+
+**CFP Data Model:** The submission form captures the following fields, organized into logical groups:
+
+**Event Details:**
+- Event Name
+- Event Type (enum: Conference, Meetup/User Group, Workshop, Summit, Symposium, Other)
+- Event Time Zone (IANA Time Zone Database identifier, e.g., "America/Chicago" — presented via searchable dropdown)
+- Event Logo (image upload)
+- Event Description
+- Event Location: City, State/Province (ISO 3166-2 subdivision), Country (ISO 3166-1 alpha-2 code)
+- Venue Name
+- Event Website URL
+- Organizer's Legal Name
+- Social Media Links (all optional): X/Twitter, LinkedIn, Facebook, Instagram, Bluesky
+- In-Person / Online / Hybrid (enum)
+
+**CFP Details:**
+- CFP Open Date / CFP Close Date (date range)
+- CFP URL
+- CFP Description/Details (rich text)
+- Speaker Support Email
+- Show Speaker Support Email on listing (boolean toggle)
+
+**Event Scheduling:**
+- Event Start Date / Event End Date (optional; null if TBD — per Decision 6)
+- Additional Event Dates (repeatable field for Meetup/User Group CFPs that cover multiple event dates)
+
+**Expense Coverage:**
+- Travel expenses covered (boolean)
+- Accommodation expenses covered (boolean)
+- Full conference fee covered (boolean)
+- Coverage Details (free text: max amount, number of nights, special terms, additional benefits)
+
+**Categorization:**
+- Event Category (e.g., Technology, Healthcare, Finance, Education — open list, admin-curated)
+- Event Topics (multi-select tags, e.g., Cloud, AI/ML, Security, DevOps — open list, admin-curated)
+
+**Auto-populated (not user input):**
+- UN M.49 World Region — Automatically assigned by the system using the ISO 3166-1 → UN M.49 mapping table based on the submitted country code. This is backend-derived and is NOT a user-facing input field.
 
 #### User Story 2.1.1: Submit a New CFP
 
@@ -196,11 +282,14 @@
 > ℹ️ **Decision 1 (Resolved):** No organizer account is required. The submission form is entirely public — contact email only.
 
 - **Given** I am on the "Submit a CFP" page (publicly accessible — no account or login required)
-- **When** I fill out the form with: event name, description, submission deadline, notification date, event date(s), location, format, topics, session types, official CFP URL, and my contact email
+- **When** I fill out the form with all required fields per the CFP Data Model (event name, event type, time zone, location, CFP open/close dates, CFP URL, contact email, etc.)
 - **And** I click "Submit"
 - **Then** my submission is saved with status "Pending Review"
 - **And** I receive a confirmation message stating "Your CFP has been submitted for review"
 - **And** the submission is not publicly visible until approved
+- **And** country and country subdivision values are validated against ISO 3166 (only valid ISO 3166-1 alpha-2 country codes and ISO 3166-2 subdivision codes are accepted)
+- **And** time zone value is validated against the IANA Time Zone Database (only canonical IANA identifiers are accepted)
+- **And** the system automatically assigns the UN M.49 world region based on the submitted country code
 
 #### User Story 2.1.2: Form Validation
 
@@ -211,15 +300,36 @@
 **Acceptance Criteria:**
 
 - **Given** I am filling out the CFP submission form
-- **When** I attempt to submit with missing required fields (event name, submission deadline, official CFP URL, contact email)
+- **When** I attempt to submit with missing required fields (event name, event type, time zone, submission deadline, official CFP URL, contact email, location details)
 - **Then** the form displays inline error messages identifying the missing or invalid fields
 - **And** the submission is not saved until all required fields are valid
+- **And** invalid ISO 3166 country/subdivision codes are rejected with a clear error message
+- **And** invalid IANA time zone identifiers are rejected with a clear error message
+
+#### User Story 2.1.3: Edit Pending Submission
+
+**As an** organizer  
+**I want to** edit my submitted CFP listing before it is approved/published  
+**So that I can** correct mistakes or add information
+
+**Acceptance Criteria:**
+
+- **Given** my submission is in "Pending Review" or "Rejected (Reconsidering)" status
+- **When** I visit my submission via a link provided in the confirmation/notification email
+- **Then** I can edit all fields and resubmit for review
+- **And** the submission status remains "Pending Review" (or changes from "Rejected (Reconsidering)" to "Pending Review")
+- **Given** my submission is in "Approved" status
+- **When** I visit my submission via the link
+- **Then** the edit option is not available
+- **And** a message is displayed: "Contact admin to request changes to an approved listing"
 
 ---
 
 ### Feature 2.2: Admin Moderation Workflow
 
-**Description:** Admin dashboard to review pending CFP submissions, approve or reject with optional feedback.
+<!-- Updated v3: Added organizer reconsideration flow -->
+
+**Description:** Admin dashboard to review pending CFP submissions, approve or reject with optional feedback. Includes a reconsideration flow allowing organizers to request re-review of rejected submissions.
 
 #### User Story 2.2.1: View Pending Submissions
 
@@ -262,20 +372,54 @@
 - **Then** the CFP status changes to "Rejected"
 - **And** the CFP is not publicly visible
 - **And** an email is sent to the organizer with the rejection reason
+- **And** the rejection notification email includes a "Request Reconsideration" button/link
+
+#### User Story 2.2.4: Organizer Requests Reconsideration
+
+**As an** organizer whose submission was rejected  
+**I want to** request reconsideration of my rejected submission  
+**So that I can** address the admin's concerns and resubmit
+
+**Acceptance Criteria:**
+
+- **Given** I received a rejection notification email for my CFP submission
+- **When** I click "Request Reconsideration" in the email or on my submission dashboard
+- **Then** the submission status changes to "Rejected (Reconsidering)"
+- **And** the submission becomes editable (see Story 2.1.3)
+- **And** the admin sees the submission back in their moderation queue with a "Reconsidering" badge
+- **And** I receive a confirmation message: "Reconsideration requested. You may now edit and resubmit your CFP."
+
+#### User Story 2.2.5: Admin Reviews Resubmitted CFP
+
+**As an** admin  
+**I want to** review a CFP that has been resubmitted after reconsideration  
+**So that I can** approve it if the organizer has addressed my concerns
+
+**Acceptance Criteria:**
+
+- **Given** a CFP submission has status "Rejected (Reconsidering)" and the organizer has resubmitted
+- **When** I view the submission in the moderation queue
+- **Then** I see a "Reconsidering" badge on the submission
+- **And** I can view the organizer's edits and any previous rejection notes
+- **And** I can approve, reject again, or leave a note for further clarification
 
 ---
 
 ## Epic 3: User Accounts & Authentication
 
+<!-- Updated v3: Added passkeys evaluation note -->
+
+> **Auth Note:** Passkey-based authentication (WebAuthn/FIDO2 passkeys) should be evaluated as the primary authentication mechanism for speakers, in place of traditional passwords. Passkeys offer a better UX (no password to remember, phishing-resistant) and align with modern security standards. Final decision deferred to Dallas and Ripley, but the architecture should not assume password-only auth. OAuth/social login (existing requirement) should remain supported alongside passkeys.
+
 ### Feature 3.1: Account Registration
 
-**Description:** Allow speakers to create an account to access personalized features (favorites, notifications).
+**Description:** Allow speakers to create an account to access personalized features (tracked CFPs, notifications).
 
 #### User Story 3.1.1: Create an Account
 
 **As a** speaker  
 **I want to** create an account with email and password  
-**So that I can** favorite CFPs and receive notifications
+**So that I can** track CFPs and receive notifications
 
 **Acceptance Criteria:**
 
@@ -310,7 +454,7 @@
 
 **As a** registered speaker  
 **I want to** log in with my email and password  
-**So that I can** access my favorites and notification settings
+**So that I can** access my tracked CFPs and notification settings
 
 **Acceptance Criteria:**
 
@@ -373,19 +517,19 @@
 
 ### Feature 4.1: Deadline Reminders
 
-**Description:** Email notifications sent to users before CFP deadlines for favorited CFPs. Notification delivery is controlled by a global account-level toggle.
+**Description:** Email notifications sent to users before CFP deadlines for tracked CFPs (Interested or Submitted status). Notification delivery is controlled by a global account-level toggle.
 
 #### User Story 4.1.1: Receive Deadline Reminder
 
 **As a** logged-in speaker  
-**I want to** receive an email reminder before a favorited CFP's deadline  
+**I want to** receive an email reminder before a tracked CFP's deadline  
 **So that I don't** miss the submission window
 
 **Acceptance Criteria:**
 
 > ℹ️ **Decision 9 (Resolved):** Deadline reminders are controlled by a **global toggle only** (on/off in account settings). Per-CFP granularity is deferred to a future iteration.
 
-- **Given** I have favorited a CFP with a deadline in 7 days
+- **Given** I have marked a CFP as Interested or Submitted with a deadline in 7 days
 - **When** the system runs the daily reminder job
 - **Then** I receive an email with subject "Reminder: [Event Name] CFP closes in 7 days"
 - **And** the email includes: event name, deadline date, link to CFP detail page, and link to official submission page
@@ -401,7 +545,7 @@
 
 - **Given** I am logged in and on my account settings page
 - **When** I toggle "Deadline Reminders" to OFF (global) and save
-- **Then** I no longer receive deadline reminder emails for any favorited CFPs
+- **Then** I no longer receive deadline reminder emails for any tracked CFPs
 - **And** I can re-enable reminders at any time
 
 ---
@@ -444,6 +588,10 @@
 ---
 
 ## Epic 5: Public API
+
+<!-- Updated v3: Added Azure API Management (APIM) infrastructure note -->
+
+> **Infrastructure Note:** All public and private APIs should be fronted by Azure API Management (APIM). APIM handles rate limiting (replacing any app-level rate limit logic), API key management, versioning, developer portal, and analytics. This is an architecture/implementation decision for Dallas and Parker — requirements documents here for traceability. Rate limits defined in Resolved Decision 3 remain the target limits; APIM will be the enforcement layer.
 
 ### Feature 5.1: API Authentication & Authorization
 
