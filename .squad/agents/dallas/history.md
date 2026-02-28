@@ -18,4 +18,9 @@
 - IaC via Terraform; CI/CD via GitHub Actions; hosted on Azure Container Apps
 - Clean, cloud-native architecture with clear separation of concerns
 
+## Latest Context (2026-02-28)
+
+**Brett Requirements Delivered:** Requirements breakdown now available at `.squad/requirements.md` — 6 epics, 15 features, 30+ user stories with Given/When/Then acceptance criteria. **Consult before starting implementation.** Includes 10 flagged open questions requiring team decision.
+
 ## Learnings
+

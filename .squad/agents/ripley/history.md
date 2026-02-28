@@ -17,4 +17,9 @@
 - Authentication via Azure AD B2C or built-in .NET Identity
 - Data: Azure SQL or Cosmos DB — final choice TBD by Dallas
 
+## Latest Context (2026-02-28)
+
+**Brett Requirements Delivered:** Requirements breakdown now available at `.squad/requirements.md` — 6 epics, 15 features, 30+ user stories with Given/When/Then acceptance criteria. **Consult before starting backend implementation.** Includes 10 flagged open questions requiring team decision. API endpoint specs, authentication model, and email trigger conditions all documented.
+
 ## Learnings
+

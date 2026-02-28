@@ -16,4 +16,9 @@
 - Edge cases to keep in mind: duplicate CFPs, expired submissions, invalid deadlines, unauthorized API access, email delivery failures
 - CI integration: tests run in GitHub Actions pipeline (Parker owns the pipeline config)
 
+## Latest Context (2026-02-28)
+
+**Brett Requirements Delivered:** Requirements breakdown now available at `.squad/requirements.md` — 6 epics, 15 features, 30+ user stories with Given/When/Then acceptance criteria. **Consult for test case derivation.** Acceptance criteria in Given/When/Then format; use directly to drive test design. 30+ stories provide comprehensive coverage matrix for unit and integration tests.
+
 ## Learnings
+
