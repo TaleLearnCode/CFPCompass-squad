@@ -48,3 +48,17 @@
 
 **Risks identified:** Blazor Server SignalR dependency, APIM Consumption cold start, Redis Basic tier has no SLA, no VNet in MVP (Consumption APIM limitation), serverless SQL cold start (~10s).
 
+### Architecture v2 Revisions (2026-03-01)
+
+**Redis:** Switched from Azure Cache for Redis (retiring Sep 2028) to **Azure Managed Redis** (C0). Documented containerized Redis as fallback option if managed pricing is unacceptable at scale.
+
+**APIM:** Switched from Consumption to **Developer tier**. Gains: no cold start, VNet integration, dedicated capacity, built-in developer portal. Upgrade path: Developer → Standard V2 (not Premium). Developer tier is not HA — no zone redundancy, 99.9% SLA only.
+
+**Event-driven write pattern:** POST/PUT operations now publish to **Azure Service Bus** (Standard tier, topic-per-aggregate). API returns **202 Accepted** with `Location` header for status polling. **Azure Functions** (Consumption plan) subscribe to topics and process writes asynchronously. Decouples API from Azure SQL cold starts.
+
+**APIM read caching:** Response caching on public GET endpoints — 5-min TTL for listings, 1-min for detail. Cache invalidation triggered by Service Bus events after successful writes.
+
+**Resolved open questions:** (1) Domain: `cfpcompass.com`, (2) Bot protection: still pending Chad's review, (3) Taxonomy: 10 Primary Domains + 10 Secondary Tag groups seeded in migration, admin-extensible, multi-select, (4) Email sender: `noreply@cfpcompass.com`.
+
+**Multi-select taxonomy data model:** Category and Topic are now many-to-many via junction tables (`CfpListingCategory`, `CfpTopic`). Filter queries require EXISTS/JOIN. Both fields multi-select on submission form.
+

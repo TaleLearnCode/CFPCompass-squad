@@ -1,15 +1,28 @@
 # CFP Compass — System Architecture
 
-**Version:** v1.0  
+**Version:** v2.0  
 **Author:** Dallas (Lead & Architect)  
-**Date:** 2026-02-28  
-**Status:** Draft — pending Chad Green review on open questions
+**Date:** 2026-02-28 (v1.0), updated 2026-03-01 (v2.0)  
+**Status:** Active — Chad Green open questions resolved; event-driven write pattern adopted
 
 ---
 
 ## 1. Solution Overview
 
 CFP Compass is a .NET 10, Azure-hosted web application that aggregates open Calls for Papers (CFPs) for community speakers. Organizers submit CFPs through a public form; admins moderate submissions before publication. Authenticated speakers track CFPs through a 3-state workflow (Interested → Submitted → Accepted), receive deadline reminders and weekly digests via email, and browse a historical archive of past CFPs. A public REST API enables third-party integrations. The system enforces international standards (ISO 3166, IANA Time Zones, UN M.49) and supports an organizer claim flow for community-contributed listings.
+
+### Event-Driven Write Architecture
+
+Write operations (POST/PUT) follow an **event-driven, eventually consistent** pattern:
+
+1. **API receives request** → validates input → publishes event to **Azure Service Bus** (Standard tier, topic-per-aggregate)
+2. **API returns HTTP 202 Accepted** with a `Location` header pointing to a status-check endpoint (e.g., `GET /api/v1/submissions/{id}/status`)
+3. **Azure Function** subscribes to Service Bus topic, processes the event, writes to Azure SQL, updates processing status
+4. Caller can poll the status endpoint or receive notification when processing completes
+
+**Read operations (GET)** leverage **APIM response caching** for public endpoints (CFP listing, browse, search) to offset Azure SQL serverless cold starts. Cache TTL: 5 minutes for listing pages, 1 minute for individual CFP detail. Cache invalidation is triggered by Service Bus events after successful write processing.
+
+This pattern decouples API responsiveness from database write latency, provides resilience against Azure SQL cold starts, and enables independent scaling of read and write paths.
 
 ### High-Level Component Diagram
 
@@ -51,13 +64,15 @@ CFP Compass is a .NET 10, Azure-hosted web application that aggregates open Call
 | Background Workers | Azure Container Apps Jobs | Scheduled jobs: digest, reminders, expiry, region assignment |
 | Database | Azure SQL Database (Serverless, S0) | Primary relational data store |
 | Blob Storage | Azure Storage Account (GPv2) | Event logos, file uploads |
-| Cache | Azure Cache for Redis (Basic C0) | Response caching, session state |
-| API Gateway | Azure API Management (Consumption tier) | Rate limiting, API key management, developer portal |
+| Cache | Azure Managed Redis (C0) | Response caching, session state |
+| API Gateway | Azure API Management (Developer tier) | Rate limiting, API key management, developer portal, response caching |
 | CDN | Azure Front Door (Standard) | Static asset caching, SSL termination, global edge |
 | Email | Azure Communication Services | Transactional and digest emails |
 | Secrets | Azure Key Vault | Connection strings, API keys, ACS credentials |
 | Container Registry | Azure Container Registry (Basic) | Docker image storage |
 | Identity | ASP.NET Core Identity + external OAuth providers | User auth, passkeys, social login |
+| Message Broker | Azure Service Bus (Standard tier) | Event-driven write operations, topic-per-aggregate |
+| Event Processors | Azure Functions (Consumption plan) | Service Bus message processors for write operations |
 
 ---
 
@@ -114,6 +129,14 @@ CFPCompass.sln
 │       │   ├── WorldRegionAssignmentJob.cs
 │       │   └── DuplicateDetectionJob.cs
 │       └── Program.cs                      # Worker host startup
+│
+│   └── CFPCompass.Functions/               # Azure Functions (Service Bus Processors)
+│       ├── CfpSubmissionProcessor.cs       # Processes CFP submission events
+│       ├── UserAccountProcessor.cs         # Processes user account events
+│       ├── NotificationProcessor.cs        # Processes notification events
+│       ├── StatusUpdateProcessor.cs        # Updates processing status records
+│       ├── CacheInvalidationProcessor.cs   # Invalidates APIM/Redis caches after writes
+│       └── host.json                       # Functions host configuration
 │
 ├── tests/
 │   ├── CFPCompass.Domain.Tests/            # xUnit — domain logic
@@ -199,21 +222,31 @@ Domain (innermost) → Application → Infrastructure / Api / Web / Workers (out
 │ DisplayName  │     │ Status (enum)    │     └───────┬───────┘
 │ IsAdmin      │     │ FK: SubmitterId  │             │
 │ ...          │     │ FK: OrganizerId  │     ┌───────┴───────┐
-└──────┬───────┘     │ FK: CategoryId   │     │  CfpTopic     │
-       │             │ CountryCode      │     │  (join table) │
-       │             │ SubdivisionCode  │     │ FK: CfpId     │
-       │             │ WorldRegion      │     │ FK: TopicId   │
-       │             │ TimeZone         │     └───────────────┘
-       │             │ CfpOpenDate      │
-       │             │ CfpCloseDate     │     ┌───────────────┐
-       │             │ ...30+ fields    │     │   Topic       │
-       │             └──────┬───────────┘     │───────────────│
+└──────┬───────┘     │ CountryCode      │     │  CfpTopic     │
+       │             │ SubdivisionCode  │     │ (join table)  │
+       │             │ WorldRegion      │     │ FK: CfpId     │
+       │             │ TimeZone         │     │ FK: TopicId   │
+       │             │ CfpOpenDate      │     └───────────────┘
+       │             │ CfpCloseDate     │
+       │             │ ...30+ fields    │     ┌───────────────┐
+       │             └──────┬───────────┘     │   Topic       │
+       │                    │                 │───────────────│
        │                    │                 │ PK: Id        │
        │                    │                 │ Name          │
-       ▼                    │                 └───────────────┘
-┌──────────────────┐        │
-│ UserCfpTracking  │        │         ┌────────────────────┐
-│──────────────────│        │         │ ModerationAction   │
+       ▼                    │                 │ GroupName     │
+┌──────────────────┐        │                 └───────────────┘
+│ UserCfpTracking  │        │
+│──────────────────│        │         ┌────────────────────────┐
+│ PK: Id           │        │         │ CfpListingCategory     │
+│ FK: UserId       │◄───────┤         │ (junction table)       │
+│ FK: CfpId        │        │         │────────────────────────│
+│ Status (enum)    │        │         │ PK: CfpId + CategoryId │
+│ (Interested/     │        │         │ FK: CfpId              │
+│  Submitted/      │        │         │ FK: CategoryId         │
+│  Accepted)       │        │         └────────────────────────┘
+└──────────────────┘        │
+                            │         ┌────────────────────┐
+                            │         │ ModerationAction   │
 │ PK: Id           │        │         │────────────────────│
 │ FK: UserId       │◄───────┼─────────│ PK: Id             │
 │ FK: CfpId        │        │         │ FK: CfpId          │
@@ -256,13 +289,20 @@ Domain (innermost) → Application → Infrastructure / Api / Web / Workers (out
 
 **Key Relationships:**
 - `Cfp` → `User` (SubmitterId, OrganizerId — both nullable FKs)
-- `Cfp` → `Category` (FK)
-- `Cfp` ↔ `Topic` (many-to-many via `CfpTopic`)
+- `Cfp` ↔ `Category` (many-to-many via `CfpListingCategory` junction table — a CFP can have multiple Primary Domain categories)
+- `Cfp` ↔ `Topic` (many-to-many via `CfpTopic` junction table — a CFP can have multiple Secondary Tag topics)
+- Both Category and Topic are multi-select on the submission form
+- Filter queries must use `EXISTS` / `JOIN` against junction tables, not simple equality checks
 - `UserCfpTracking` → `User` + `Cfp` (composite unique on UserId + CfpId)
 - `ModerationAction` → `Cfp` + `User` (admin who acted)
 - `ClaimRequest` → `Cfp` + `User` (claimant)
 - `Country` → `Subdivision` (one-to-many)
 - `Country.WorldRegion` stores the UN M.49 region (auto-assigned)
+
+**Taxonomy Seeding:**
+- 10 Primary Domains (Categories) and 10 groups of Secondary Tags (Topics) are seeded via EF Core `HasData()` in DB migration
+- Both are admin-extensible via the admin UI
+- See `requirements.md` for the full seeded taxonomy list
 
 ### Data Access: Entity Framework Core
 
@@ -295,7 +335,7 @@ Domain (innermost) → Application → Infrastructure / Api / Web / Workers (out
 
 | Layer | Technology | Use Case |
 |-------|-----------|----------|
-| Distributed cache | Azure Cache for Redis (Basic C0) | API response caching, session state, rate limit counters (app-level fallback) |
+| Distributed cache | Azure Managed Redis (C0) | API response caching, session state, rate limit counters (app-level fallback) |
 | In-memory cache | `IMemoryCache` | Reference data: countries, subdivisions, topics, categories (refreshed every 24h) |
 | Output cache | ASP.NET Core Output Caching | Public CFP listing pages (cache-tag invalidation on CFP approval/expiry) |
 
@@ -303,6 +343,8 @@ Domain (innermost) → Application → Infrastructure / Api / Web / Workers (out
 - CFP listing cache is busted when a CFP is approved, rejected, expired, or modified
 - Reference data (countries, topics) is cached for 24 hours with manual refresh endpoint for admins
 - Redis is used for distributed scenarios; in-memory for single-instance reference data
+
+**Note:** Azure Managed Redis replaces the retired Azure Cache for Redis. Alternatively, a containerized Redis instance can run as a Container App alongside the main app if Azure Managed Redis pricing is unacceptable at scale.
 
 ---
 
@@ -394,7 +436,9 @@ All public API endpoints are versioned under `/api/v1/` and fronted by Azure API
 
 ### APIM Topology
 
-**Tier:** Consumption (pay-per-call, no fixed cost for MVP)
+**Tier:** Developer (dedicated capacity, no cold start, VNet integration support, built-in developer portal)
+
+**Upgrade path:** Developer → Standard V2 when traffic and financial justification demand it (not Premium).
 
 **Products:**
 | Product | Access | Rate Limit | Description |
@@ -404,9 +448,24 @@ All public API endpoints are versioned under `/api/v1/` and fronted by Azure API
 
 **Policies:**
 - **Inbound:** Validate subscription key, rate limiting (by subscription key), CORS headers, request size limit (1 MB)
-- **Backend:** Forward to Container App API backend (internal URL)
-- **Outbound:** Remove internal headers, set cache-control headers
+- **Backend:** Forward to Container App API backend (internal URL via VNet integration)
+- **Outbound:** Remove internal headers, set cache-control headers, response caching for GET endpoints
 - **On-error:** Standard error response format
+
+**APIM Response Caching (Read Path):**
+| Endpoint Pattern | Cache TTL | Notes |
+|-----------------|-----------|-------|
+| `GET /api/v1/cfps` (listing) | 5 minutes | Public listing pages; invalidated on write events |
+| `GET /api/v1/cfps/{id}` (detail) | 1 minute | Individual CFP detail; shorter TTL for fresher data |
+| `GET /api/v1/topics`, `GET /api/v1/categories` | 60 minutes | Reference data; rarely changes |
+| `GET /api/v1/countries`, `GET /api/v1/regions` | 24 hours | Static reference data |
+
+Cache invalidation is triggered by Service Bus events after successful write processing — the `CacheInvalidationProcessor` Azure Function calls APIM cache purge and Redis `DEL` on relevant keys.
+
+**Async Write Pattern (POST/PUT via public API):**
+- `POST /api/v1/cfps` and `PUT /api/v1/cfps/{id}` return **HTTP 202 Accepted** with a `Location` header
+- Response body includes `{ "statusUrl": "/api/v1/submissions/{id}/status", "id": "{id}" }`
+- Caller polls `GET /api/v1/submissions/{id}/status` for processing state (`Pending`, `Processing`, `Completed`, `Failed`)
 
 **Developer Portal:** Enabled for API consumers to register, browse API docs (auto-generated from OpenAPI spec), and manage subscription keys.
 
@@ -633,6 +692,30 @@ public class CfpExpiryJob(ICfpService cfpService, ILogger<CfpExpiryJob> logger)
 
 **Note on DuplicateDetectionJob:** This runs inline during submission processing (not on a schedule) — it queries for existing CFPs with the same `CfpUrl` and flags the submission for admin attention. It's part of the `CfpSubmissionService`, not a scheduled job.
 
+### Service Bus Message Processors (Azure Functions)
+
+In addition to scheduled Container Apps Jobs, write operations are processed asynchronously via **Azure Functions** subscribing to **Azure Service Bus** topics.
+
+| Processor | Service Bus Topic | Description |
+|-----------|-------------------|-------------|
+| `CfpSubmissionProcessor` | `cfp-submissions` | Processes new/updated CFP submissions — validates, writes to Azure SQL, triggers duplicate detection |
+| `UserAccountProcessor` | `user-accounts` | Processes user account events (registration, profile updates) |
+| `NotificationProcessor` | `notifications` | Processes notification events (triggers ACS email sends) |
+| `StatusUpdateProcessor` | `processing-status` | Updates submission/processing status records for caller polling |
+| `CacheInvalidationProcessor` | `cache-invalidation` | Invalidates APIM response cache and Redis keys after successful writes |
+
+**Service Bus Configuration:**
+- **Tier:** Standard (supports topics + subscriptions, dead-letter queues)
+- **Pattern:** Topic-per-aggregate — each aggregate root has its own topic with one or more subscriptions
+- **Dead-letter:** Failed messages after 3 retries are moved to dead-letter queue for manual review
+- **Message TTL:** 24 hours (processing should complete within minutes; TTL is a safety net)
+
+**Azure Functions Host:**
+- **Plan:** Consumption (pay-per-execution; scales to zero when no messages)
+- **Runtime:** .NET 10 isolated worker process
+- **Bindings:** Service Bus trigger bindings; shared Application layer services via DI
+- **Project:** `CFPCompass.Functions` — references `CFPCompass.Application` for business logic
+
 ---
 
 ## 8. Email Architecture
@@ -713,16 +796,20 @@ CFPCompass.Infrastructure/
 | Azure Container Apps | Consumption | $5-20 | Pay-per-use; 2 apps + jobs |
 | Azure Container Apps Environment | Consumption | Included | Shared environment for all apps |
 | Azure SQL Database | Serverless (GP S0) | $5-15 | Auto-pause when idle |
-| Azure Cache for Redis | Basic C0 (250 MB) | $16 | Smallest tier |
+| Azure Managed Redis | C0 | $16 | Distributed cache; replaces retired Azure Cache for Redis |
 | Azure Storage Account | GPv2 LRS | $1-3 | Blob storage for logos |
-| Azure API Management | Consumption | $3.50/million calls | Pay-per-call; no fixed cost |
+| Azure API Management | Developer | $50 | Dedicated capacity, VNet integration, no cold start, developer portal |
+| Azure Service Bus | Standard | $10 | Topic-per-aggregate for event-driven writes, dead-letter queues |
+| Azure Functions | Consumption | $0-5 | Service Bus processors; pay-per-execution, scales to zero |
 | Azure Communication Services | Pay-as-you-go | $0.25/1000 emails | Transactional email |
 | Azure Key Vault | Standard | $0.03/10K operations | Secrets management |
 | Azure Container Registry | Basic | $5 | Docker image store |
 | Azure Front Door | Standard | $35 | CDN + SSL + routing |
 | Azure Log Analytics | Pay-as-you-go | $2-5 | Centralized logging |
 
-**Estimated MVP total: ~$75-105/month**
+**Estimated MVP total: ~$125-165/month**
+
+> Cost increase vs. v1 (~$75-105) is driven by APIM Developer tier ($50 fixed vs. pay-per-call) and Service Bus Standard ($10). Trade-off: dedicated capacity, no cold starts, VNet integration, and event-driven resilience.
 
 ### Network Topology
 
@@ -733,19 +820,25 @@ Internet
     │
     ├── Azure Front Door ──► Container App (Web) [public ingress]
     │
-    └── Azure Front Door ──► APIM (Consumption) ──► Container App (API) [APIM-only ingress]
+    └── Azure Front Door ──► APIM (Developer) ──► Container App (API) [VNet-integrated]
                                                          │
                                                          ├── Azure SQL (firewall: allow Azure services)
-                                                         ├── Redis (access key auth)
+                                                         ├── Azure Managed Redis (access key auth)
+                                                         ├── Azure Service Bus (managed identity)
                                                          ├── Blob Storage (SAS tokens)
                                                          ├── Key Vault (managed identity)
                                                          └── ACS (connection string from Key Vault)
+                                                         
+    Azure Functions (Consumption) ──► Service Bus (subscriber)
+                                  ──► Azure SQL (writes)
+                                  ──► Redis (cache invalidation)
+                                  ──► APIM (cache purge)
 ```
 
-**Rationale for public endpoints (no VNet):**
-- APIM Consumption tier does not support VNet integration
-- Azure SQL firewall + Redis access keys + Key Vault managed identity provide sufficient security for MVP
-- VNet can be added post-MVP if/when moving to APIM Standard v2 tier
+**APIM Developer tier enables VNet integration (internal mode):**
+- Container App API backend communicates with APIM over private network
+- Azure SQL firewall + Redis access keys + Key Vault managed identity provide defense in depth
+- Upgrade path: Developer → Standard V2 for zone redundancy and higher SLA when traffic demands it
 
 ### Key Vault Usage
 
@@ -753,6 +846,7 @@ Internet
 |--------|---------|
 | `AzureSql-ConnectionString` | Database connection |
 | `Redis-ConnectionString` | Cache connection |
+| `ServiceBus-ConnectionString` | Service Bus connection |
 | `ACS-ConnectionString` | Email service |
 | `Storage-ConnectionString` | Blob storage |
 | `Fido2-Origins` | WebAuthn allowed origins |
@@ -767,7 +861,7 @@ Internet
 ### Container Registry
 
 - **Azure Container Registry (Basic tier)**
-- Images: `cfpcompass-web`, `cfpcompass-api`, `cfpcompass-workers`
+- Images: `cfpcompass-web`, `cfpcompass-api`, `cfpcompass-workers`, `cfpcompass-functions`
 - Tags: `latest`, `{git-sha}`, `{semver}`
 - GitHub Actions pushes images on merge to `main`
 - Container Apps configured to pull from ACR via managed identity
@@ -787,7 +881,9 @@ infra/
 │   ├── container-apps/        # Container Apps Environment + Apps + Jobs
 │   ├── sql/                   # Azure SQL Server + Database
 │   ├── storage/               # Storage Account + Containers
-│   ├── redis/                 # Azure Cache for Redis
+│   ├── redis/                 # Azure Managed Redis
+│   ├── service-bus/           # Azure Service Bus (Standard tier)
+│   ├── functions/             # Azure Functions (Consumption plan)
 │   ├── apim/                  # API Management + Products + Policies
 │   ├── keyvault/              # Key Vault + Access Policies
 │   ├── acr/                   # Container Registry
@@ -1017,64 +1113,167 @@ public class CfpApiTests : IClassFixture<CfpCompassWebApplicationFactory>
 
 ---
 
-### ADR-005: Azure Cache for Redis for Distributed Caching
+### ADR-005: Azure Managed Redis for Distributed Caching
 
-**Context:** The API and web app need caching for response data, session state, and reference data. Options: Redis, in-memory only, SQL-based cache.
+**Context:** The API and web app need caching for response data, session state, and reference data. Azure Cache for Redis is being retired September 30, 2028. Options evaluated: Azure Managed Redis (Microsoft's replacement), containerized Redis, in-memory only, SQL-based cache.
 
-**Decision:** Azure Cache for Redis (Basic C0) for distributed cache; `IMemoryCache` for local reference data.
+**Decision:** Azure Managed Redis (C0) as default; containerized Redis (self-hosted as Container App) as documented fallback if Azure Managed Redis pricing is unacceptable at scale. `IMemoryCache` for local reference data.
 
 **Consequences:**
 - ✅ Distributed cache supports multiple container instances
 - ✅ Session state survives container restarts
 - ✅ Sub-millisecond reads for cached CFP listings
-- ⚠️ Basic tier has no SLA and no replication — acceptable for MVP
-- ⚠️ Additional $16/month cost
-- Mitigation: In-memory fallback for non-critical data; upgrade to Standard tier when traffic justifies it
+- ✅ Azure Managed Redis built on Redis 7.x — no retirement risk, same managed experience
+- ✅ Containerized fallback eliminates vendor lock-in and additional Azure service cost
+- ⚠️ Containerized Redis fallback adds operational responsibility (monitoring, persistence, upgrades)
+- ⚠️ Additional ~$16/month cost for managed tier
+- Mitigation: In-memory fallback for non-critical data; evaluate containerized option if managed pricing becomes a concern at scale
 
 ---
 
-### ADR-006: APIM Consumption Tier for API Gateway
+### ADR-006: APIM Developer Tier for API Gateway
 
-**Context:** The public API needs rate limiting, subscription key management, and a developer portal. APIM was flagged as a requirement in decisions.md.
+**Context:** The public API needs rate limiting, subscription key management, response caching, and a developer portal. APIM was flagged as a requirement in decisions.md. Consumption tier was previously considered but has cold start and no VNet support.
 
-**Decision:** Azure API Management, Consumption tier.
+**Decision:** Azure API Management, Developer tier.
+
+**Upgrade path:** Developer → Standard V2 when traffic volume and financial justification demand higher availability and zone redundancy.
 
 **Consequences:**
-- ✅ Pay-per-call (no fixed cost for MVP)
-- ✅ Built-in rate limiting, key management, developer portal
+- ✅ Dedicated capacity — no cold start latency
+- ✅ VNet integration (internal mode) — API backend communicable over private network
+- ✅ Built-in developer portal for API consumers
+- ✅ Built-in rate limiting, key management, response caching
 - ✅ Auto-generated API documentation from OpenAPI spec
-- ⚠️ Consumption tier has cold start (~1-2s on first call after idle)
-- ⚠️ No VNet integration in Consumption tier
-- ⚠️ Limited policy customization compared to Standard tier
-- Mitigation: Front Door keeps the API warm via health probes; upgrade to Standard v2 when needed
+- ⚠️ Fixed monthly cost (~$50) vs. Consumption's pay-per-call — justified by no cold start and VNet
+- ⚠️ Developer tier is NOT suitable for high-availability production — no SLA beyond 99.9%, no zone redundancy
+- Mitigation: Upgrade to Standard V2 (not Premium) when traffic demands it; Standard V2 adds zone redundancy and higher SLA
 
 ---
 
-## 13. Open Questions for Chad
+### ADR-007: Event-Driven Write Pattern via Azure Service Bus
 
-### Q1: Domain Name and SSL
+**Context:** Azure SQL Serverless has cold start latency (~10s after idle). Synchronous writes block API callers during DB wake-up. Write operations should be decoupled from database availability for resilience and responsiveness.
 
-**Question:** What is the production domain for CFP Compass (e.g., `cfpcompass.com`, `cfpcompass.dev`)? Do you already own a domain, or should Parker provision one? This affects Front Door configuration, CORS policy, and APIM custom domain setup.
+**Decision:** POST/PUT operations publish events to Azure Service Bus (Standard tier, topic-per-aggregate). API returns HTTP 202 Accepted with a `Location` header for status polling. Azure Functions subscribe to topics and process writes asynchronously.
 
-**Blocks:** Infrastructure provisioning (Parker), CORS and cookie domain configuration.
+**Consequences:**
+- ✅ API responds instantly (202 Accepted) regardless of DB state — eliminates cold-start impact on callers
+- ✅ Decouples API from database — Service Bus buffers events during DB cold start
+- ✅ Dead-letter queues provide automatic failure handling and retry
+- ✅ Independent scaling of read (APIM cache) and write (Functions) paths
+- ✅ Audit trail via Service Bus message metadata
+- ⚠️ Eventually consistent — callers must poll for completion status
+- ⚠️ Added infrastructure complexity (Service Bus + Functions + status tracking)
+- ⚠️ Requires idempotent message processing (deduplication by message ID)
+- Mitigation: Status polling endpoint provides visibility; dead-letter monitoring alerts via Application Insights
 
-### Q2: reCAPTCHA vs. Alternative Bot Protection
+---
 
-**Question:** The public CFP submission form needs bot protection to prevent spam submissions. Should we use Google reCAPTCHA v3 (free, widely used, but Google dependency), Cloudflare Turnstile (free, privacy-focused), or a simple honeypot approach? This affects the submission form UX and third-party dependencies.
+### ADR-008: Azure Service Bus Standard Tier
+
+**Context:** The event-driven write pattern needs a message broker with topics, subscriptions, and dead-letter queues. Options: Service Bus Basic (queues only), Standard (topics + subscriptions), Premium (dedicated capacity).
+
+**Decision:** Azure Service Bus Standard tier.
+
+**Consequences:**
+- ✅ Topics + subscriptions enable fan-out (e.g., CFP write → cache invalidation + notification)
+- ✅ Dead-letter queues for failed message handling
+- ✅ Adequate throughput for MVP volume
+- ✅ ~$10/month — cost-effective for MVP
+- ⚠️ Shared infrastructure (not dedicated) — acceptable for MVP traffic
+- Mitigation: Upgrade to Premium if message volume requires dedicated throughput or VNet integration
+
+---
+
+### ADR-009: HTTP 202 Accepted Response Pattern
+
+**Context:** With event-driven writes, the API cannot return the final result synchronously. Callers need a way to know when processing completes.
+
+**Decision:** Write endpoints return HTTP 202 Accepted with a `Location` header pointing to a status-check endpoint. Status transitions: `Pending` → `Processing` → `Completed` | `Failed`.
+
+**Consequences:**
+- ✅ Caller has a clear contract for async operations
+- ✅ Status endpoint is cacheable and lightweight (simple record lookup)
+- ✅ Failed status includes error details for debugging
+- ⚠️ Callers must implement polling logic (or accept eventual consistency)
+- ⚠️ Status records add storage overhead (mitigated by TTL-based cleanup)
+- Mitigation: Well-documented API pattern; SDKs can abstract polling; status records purged after 30 days
+
+---
+
+### ADR-010: Multi-Select Taxonomy with Junction Tables
+
+**Context:** CFP listings need to be tagged with multiple Primary Domains (Categories) and multiple Secondary Tags (Topics). The original schema used a single FK (`CategoryId`) which limited a CFP to one category.
+
+**Decision:** Many-to-many relationships via `CfpListingCategory` and `CfpTopic` junction tables. Both fields are multi-select on the submission form.
+
+**Consequences:**
+- ✅ CFPs can be accurately tagged across multiple domains and topics
+- ✅ Richer filtering for speakers browsing CFPs
+- ✅ Seeded taxonomy (10 Primary Domains, 10 Secondary Tag groups) provides immediate value
+- ✅ Admin-extensible via admin UI
+- ⚠️ Filter queries require `EXISTS` / `JOIN` against junction tables — slightly more complex than equality check
+- ⚠️ Multi-select UI adds form complexity
+- Mitigation: EF Core handles many-to-many natively; specification pattern encapsulates query complexity
+
+---
+
+### ADR-011: APIM Response Caching for Read Path
+
+**Context:** Azure SQL Serverless cold starts affect read latency. Public CFP listing and browse endpoints serve largely static data that changes infrequently (only on CFP approval/modification).
+
+**Decision:** APIM response caching for public GET endpoints. TTL: 5 minutes for listing pages, 1 minute for individual CFP detail. Cache invalidation triggered by Service Bus events after successful write processing.
+
+**Consequences:**
+- ✅ Sub-second response times for cached reads — eliminates SQL cold-start impact on readers
+- ✅ Reduces Azure SQL load and cost
+- ✅ Event-driven cache invalidation ensures data freshness within minutes
+- ⚠️ Stale data possible for up to 5 minutes on listing pages (acceptable for CFP use case)
+- ⚠️ Cache invalidation adds complexity to the write path
+- Mitigation: Short TTL on detail pages (1 min); manual cache purge available via admin endpoint
+
+---
+
+## 13. Open Questions — Status
+
+### Q1: Domain Name and SSL ✅ RESOLVED
+
+**Answer:** Production domain is `cfpcompass.com`.
+
+**Impact applied throughout:**
+- CORS policy: `https://cfpcompass.com`, `https://www.cfpcompass.com`
+- APIM custom domain: `api.cfpcompass.com`
+- ACS sender domain: `cfpcompass.com`
+- Front Door: configured for `cfpcompass.com` + `www.cfpcompass.com`
+- Cookie domain: `.cfpcompass.com`
+
+### Q2: reCAPTCHA vs. Alternative Bot Protection ⏳ PENDING
+
+**Status:** Chad is reviewing pros/cons of reCAPTCHA v3, Cloudflare Turnstile, and honeypot approaches. Decision pending.
 
 **Blocks:** Submission form implementation (Lambert), API submission endpoint (Ripley).
 
-### Q3: Initial Reference Data Seeding
+### Q3: Initial Reference Data Seeding ✅ RESOLVED
 
-**Question:** Who provides the initial list of event categories and topic tags? Should we pre-seed with a standard set (e.g., Technology, Healthcare, Finance for categories; Cloud, AI/ML, Security, DevOps for topics), or does Chad want to define the initial taxonomy? These are admin-curated lists per the requirements.
+**Answer:** Full taxonomy provided by Chad and captured in `requirements.md`.
 
-**Blocks:** Database seeding (Ripley), filter UI (Lambert).
+**Architecture notes:**
+- **10 Primary Domains** (Categories) seeded via EF Core `HasData()` in DB migration
+- **10 groups of Secondary Tags** (Topics) seeded via EF Core `HasData()` in DB migration
+- Both are admin-extensible via the admin UI
+- Both fields are multi-select on the submission form
+- Data model uses junction tables (`CfpListingCategory`, `CfpTopic`) for many-to-many relationships
 
-### Q4: Email Sender Identity
+### Q4: Email Sender Identity ✅ RESOLVED
 
-**Question:** What sender address and display name should transactional emails use? ACS requires a verified sender domain (e.g., `noreply@cfpcompass.com`). This depends on Q1 (domain) and requires DNS verification for ACS.
+**Answer:** `noreply@cfpcompass.com`
 
-**Blocks:** Email implementation (Ripley), ACS domain verification (Parker).
+**Impact applied:**
+- ACS sender domain: `cfpcompass.com` (requires DNS verification — TXT + SPF + DKIM records)
+- Email `From` header: `CFP Compass <noreply@cfpcompass.com>`
+- All email templates use this sender identity
+- Reply-To can be configured per email type if needed (e.g., support inquiries)
 
 ---
 
