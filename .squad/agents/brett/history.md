@@ -197,3 +197,48 @@
 - Claim verification routes to Speaker Support Email (on listing) or Organizer Contact Email (from submission) — not to submitter's email.
 - Feature count raised to **18** (from 17 in v3).
 
+### 2026-02-28 — Requirements v3.2: Full Taxonomy & Multi-Select Categories/Topics
+
+**Task:** Chad Green provided the full authoritative taxonomy for Event Category (Primary Domains) and Event Topics (Secondary Tags), and specified that both are multi-select fields.
+
+**Key Changes Applied:**
+
+**1. Full Taxonomy Replacement (Feature 2.1 — Categorization):**
+- Replaced placeholder category/topic description with the full authoritative taxonomy
+- **10 Primary Domains (Event Category):** Software Development & Engineering, Cloud & Infrastructure, Data/AI/ML, Security & Privacy, Web/Mobile/Frontend, DevOps/Platform Engineering/Automation, Enterprise & Architecture, Open Source & Community, Product/Design/Innovation, Specialized Domains
+- **10 Secondary Tag Groups (Event Topics):** Programming Languages, Frameworks & Ecosystems, Cloud Providers, AI/ML Focus Areas, Architecture Styles, Infrastructure Practices, Security Topics, Data Topics, Developer Experience, Community & Career
+- Both are seeded from the authoritative list; admin-extensible (not fully free-text or open)
+
+**2. Multi-Select for Categories AND Topics (Feature 2.1):**
+- **Event Category (Primary Domain):** Multi-select, at least 1 required. A CFP may belong to multiple primary domains (e.g., Cloud + Security).
+- **Event Topics (Secondary Tags):** Multi-select, 0 or more optional. No maximum — select all that apply.
+- Updated submission form field descriptions to clarify multi-select behavior and requirement constraints
+
+**3. Submission Story ACs Expanded (Story 2.1.1):**
+- Added ACs: Organizer can select 1+ categories from seeded list; at least one required to submit
+- Added ACs: Multiple selected categories appear on listing and are filterable
+- Added ACs: Organizer can select 0+ topics; field is optional
+- Added AC: Filter behavior works against multi-value sets (any CFP with the selected category/tag is returned)
+
+**4. Filter Behavior Updated (Features 1.1, 1.2):**
+- Feature 1.1 description: Added note that CFPs may have multiple categories/topics; filtering works against multi-value sets
+- Feature 1.2 description: Added note that category/topic filters work against multi-value sets — a CFP with multiple categories appears in results for any of its selected categories
+- Story 1.2.1 (Filter by Topic): Added AC clarifying multi-value set membership filter behavior
+
+**Patterns Applied:**
+- Surgical edits only — updated Categorization section, relevant ACs, and feature descriptions
+- Maintained Given/When/Then structure for all new ACs
+- Clarified multi-select constraints: at least 1 category required, 0+ topics optional
+- Made filter behavior explicit: multi-value set membership (not exact match)
+
+**Impact:**
+- Ripley (Backend): Database schema must support many-to-many relationships for categories and topics; seeded taxonomy data in migration; filter queries must handle multi-value set membership
+- Lambert (Frontend): Multi-select UI controls for both fields; validation to enforce at least 1 category selected; filter UI supports multi-select with OR logic
+- Kane (Tester): Test multi-select validation; test filter behavior with CFPs having multiple categories/topics; verify at least 1 category required, topics optional
+- Dallas (Lead): Taxonomy is now defined and locked for MVP; admin extension mechanism can be deferred to post-MVP
+
+**Taxonomy:**
+- **Primary Domains (10):** Software Dev/Eng, Cloud/Infra, Data/AI/ML, Security/Privacy, Web/Mobile/Frontend, DevOps/Platform/Automation, Enterprise/Architecture, Open Source/Community, Product/Design/Innovation, Specialized Domains
+- **Secondary Tags (10 groups):** Programming Languages, Frameworks/Ecosystems, Cloud Providers, AI/ML Focus, Architecture Styles, Infrastructure Practices, Security Topics, Data Topics, Developer Experience, Community/Career
+
+

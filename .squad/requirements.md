@@ -35,7 +35,7 @@
 
 ### Feature 1.1: Public CFP Listing
 
-**Description:** Display all approved CFPs on a public-facing page with essential details (event name, deadline, location, topics).
+**Description:** Display all approved CFPs on a public-facing page with essential details (event name, deadline, location, topics). A CFP may have multiple categories and topics; filtering works against multi-value sets.
 
 #### User Story 1.1.1: View All Open CFPs
 
@@ -70,7 +70,7 @@
 
 <!-- Updated v3: Added UN M.49 world region, country, and country subdivision filters -->
 
-**Description:** Allow speakers to filter CFPs by topic, location (world region, country, country subdivision), deadline range, and format; sort by deadline, event date, or recently added.
+**Description:** Allow speakers to filter CFPs by topic, location (world region, country, country subdivision), deadline range, and format; sort by deadline, event date, or recently added. Category and topic filters work against multi-value sets — a CFP with multiple categories will appear in results for any of its selected categories.
 
 #### User Story 1.2.1: Filter CFPs by Topic
 
@@ -84,6 +84,9 @@
 - **When** I select one or more topic tags from a filter panel
 - **Then** the list updates to show only CFPs matching all selected topics
 - **And** I can clear filters to return to the full list
+- **Given** a speaker is filtering CFPs
+- **When** they filter by a Primary Domain or Secondary Tag
+- **Then** any CFP that includes that category/tag in its multi-value set is returned
 
 #### User Story 1.2.2: Filter CFPs by Location & Format
 
@@ -267,8 +270,28 @@
 - Coverage Details (free text: max amount, number of nights, special terms, additional benefits)
 
 **Categorization:**
-- Event Category (e.g., Technology, Healthcare, Finance, Education — open list, admin-curated)
-- Event Topics (multi-select tags, e.g., Cloud, AI/ML, Security, DevOps — open list, admin-curated)
+- **Event Category (Primary Domain)** — Multi-select, at least 1 required. A CFP may belong to multiple primary domains. Seeded from this authoritative taxonomy (admin-extensible, not free-text):
+  1. Software Development & Engineering — General programming, languages, frameworks, tooling, architecture, testing, DevOps
+  2. Cloud & Infrastructure — Cloud platforms, distributed systems, networking, SRE, observability, infrastructure automation
+  3. Data, AI & Machine Learning — Data engineering, analytics, ML/AI, LLMs, MLOps, data science
+  4. Security & Privacy — Application security, cloud security, governance, compliance, identity, threat detection
+  5. Web, Mobile & Frontend — Web technologies, frontend frameworks, UX/UI, mobile development
+  6. DevOps, Platform Engineering & Automation — CI/CD, platform teams, IaC, GitOps, automation, reliability
+  7. Enterprise & Architecture — Software architecture, system design, integration, enterprise platforms, modernization
+  8. Open Source & Community — OSS ecosystems, maintainership, community governance, tooling
+  9. Product, Design & Innovation — Product management, design systems, research, innovation practices
+  10. Specialized Domains — Niche or vertical-specific tech (e.g., fintech, health tech, IoT, robotics, gaming)
+- **Event Topics (Secondary Tags)** — Multi-select, 0 or more. Optional field. Seeded from these secondary tag groups (admin-extensible, not free-text):
+  - Programming Languages — .NET, Java, JavaScript/TypeScript, Python, Go, Rust, C++, etc.
+  - Frameworks & Ecosystems — React, Angular, Vue, ASP.NET Core, Spring, Django, Node.js, etc.
+  - Cloud Providers — Azure, AWS, GCP, multi-cloud, hybrid cloud
+  - AI/ML Focus Areas — LLMs, generative AI, MLOps, applied ML, AI ethics
+  - Architecture Styles — Event-driven, microservices, serverless, monolith modernization, domain-driven design
+  - Infrastructure Practices — IaC, Terraform, Kubernetes, containers, networking, observability
+  - Security Topics — AppSec, cloud security, identity, zero trust, red/blue/purple team
+  - Data Topics — Data engineering, warehousing, analytics, BI, streaming, databases
+  - Developer Experience — Tooling, productivity, documentation, testing, automation
+  - Community & Career — Speaking, leadership, mentoring, DEI, community building
 
 **Auto-populated (not user input):**
 - UN M.49 World Region — Automatically assigned by the system using the ISO 3166-1 → UN M.49 mapping table based on the submitted country code. This is backend-derived and is NOT a user-facing input field.
@@ -297,6 +320,17 @@
 - **And** country and country subdivision values are validated against ISO 3166 (only valid ISO 3166-1 alpha-2 country codes and ISO 3166-2 subdivision codes are accepted)
 - **And** time zone value is validated against the IANA Time Zone Database (only canonical IANA identifiers are accepted)
 - **And** the system automatically assigns the UN M.49 world region based on the submitted country code
+- **Given** an organizer is completing the submission form
+- **When** they reach the Event Category field
+- **Then** they can select one or more Primary Domain categories from the seeded list
+- **And** at least one category must be selected to submit
+- **Given** an organizer selects multiple categories
+- **When** the listing is published
+- **Then** all selected categories appear on the listing and are filterable
+- **Given** an organizer is completing the submission form
+- **When** they reach the Event Topics field
+- **Then** they can select zero or more Secondary Tags from the seeded list
+- **And** this field is optional
 - **Given** a submitter completes the form and indicates they **are** the event organizer (default)
 - **When** the submission is saved
 - **Then** the submission proceeds through the normal moderation workflow with status "Organizer Submitted"
