@@ -62,3 +62,40 @@
 
 **Multi-select taxonomy data model:** Category and Topic are now many-to-many via junction tables (`CfpListingCategory`, `CfpTopic`). Filter queries require EXISTS/JOIN. Both fields multi-select on submission form.
 
+### Bot Protection Analysis (2025-03-01)
+
+**Comprehensive comparison document delivered:** Analyzed three bot protection options for CFP submission form — reCAPTCHA v3 (Google), Cloudflare Turnstile, and Honeypot fields. Document covers technical integration for .NET 10 / Blazor Server, privacy/GDPR implications, cost projections, risk assessment, and hybrid approaches. Written to session files: `C:\Users\chadg\.copilot\session-state\112b81f4-76e5-4d47-8515-e0c60a20b566\files\bot-protection-comparison.md`.
+
+**Recommendation:** **Cloudflare Turnstile + Honeypot (Hybrid 1)** — Layered defense with zero cost, GDPR-compliant, privacy-first (critical for international tech community audience), effective against simple and sophisticated bots. Weighted decision matrix score: 4.70/5.00. Honeypot catches 80%+ of low-effort spam instantly (no API latency). Turnstile catches remaining 20% (headless browsers, sophisticated scripts). Implementation: 8 hours total. Fallback if Turnstile alone preferred: 4-6 hours (honeypot can be added later if spam increases).
+
+**Why not reCAPTCHA v3:** Google tracking creates GDPR liability (requires Enterprise tier at $5-10/mo + DPA + consent banner + legal review). Reputational risk with privacy-aware developer audience. Turnstile delivers equivalent effectiveness without privacy tradeoff.
+
+**Decision pending:** Chad Green final approval. Open question #2 (Bot protection strategy) resolved pending Chad's review of analysis.
+
+### Bot Protection Decision Finalized (2026-02-28)
+
+**Chad Green approved:** Cloudflare Turnstile + Honeypot as selected bot protection strategy.
+
+**Implementation details locked:**
+- Turnstile: Invisible challenge widget on CFP submission form; free tier, GDPR-compliant (no Google tracking)
+- Honeypot: Hidden form field (CSS hidden, not type=hidden); server-side validation before processing
+- Server validation: Submission API verifies Turnstile token via Cloudflare API; rejects filled honeypot fields
+- No cost impact; Cloudflare as separate dependency from CDN choice
+- Zero false positives for VPN/proxy users (unlike reCAPTCHA v3)
+- Layered defense: Honeypot catches 80%+ low-effort spam instantly; Turnstile catches sophisticated bots
+
+**ADR-012 created** documenting decision rationale, integration approach, and consequences.
+
+**Open question Q2 fully resolved.** No blockers remain for submission form implementation (Lambert) or API submission endpoint (Ripley).
+
+### Architecture Open Questions — All Resolved (2026-02-28)
+
+Chad Green confirmed Cloudflare Turnstile + Honeypot as the bot protection strategy, closing Q2. All four architecture open questions are now resolved:
+
+- Q1 ✅ Domain: `cfpcompass.com`
+- Q2 ✅ Bot protection: Cloudflare Turnstile + Honeypot (ADR-012)
+- Q3 ✅ Taxonomy: 10 Primary Domains + 10 Secondary Tag groups, admin-extensible
+- Q4 ✅ Email sender: `noreply@cfpcompass.com`
+
+`architecture.md` updated: Q2 section replaced with full resolution detail; ADR-012 in Section 12; `Turnstile-SiteKey` and `Turnstile-SecretKey` added to Key Vault secrets table (Section 9). No open architectural questions remain.
+

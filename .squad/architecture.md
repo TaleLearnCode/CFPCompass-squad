@@ -840,6 +840,15 @@ Internet
 - Azure SQL firewall + Redis access keys + Key Vault managed identity provide defense in depth
 - Upgrade path: Developer → Standard V2 for zone redundancy and higher SLA when traffic demands it
 
+### Bot Protection
+
+**Submission Form Security:** Public CFP submission form is protected by Cloudflare Turnstile (invisible challenge) + hidden honeypot field for layered bot protection. See ADR-012 for decision rationale and integration details.
+
+- **Turnstile:** Invisible browser challenge; free/unlimited; GDPR-compliant; zero false positives for VPN users
+- **Honeypot:** Hidden form field (CSS display:none, not type=hidden); server-side validation before processing
+- **Server-side validation:** Submission API endpoint verifies Turnstile token via Cloudflare API before accepting CFP data
+- **No external dependencies:** Cloudflare separate from CDN choice; free tier requires no contract or commitment
+
 ### Key Vault Usage
 
 | Secret | Purpose |
@@ -855,6 +864,8 @@ Internet
 | `OAuth-GitHub-ClientId` / `ClientSecret` | GitHub OAuth |
 | `OAuth-Microsoft-ClientId` / `ClientSecret` | Microsoft OAuth |
 | `Jwt-SigningKey` | JWT signing for email tokens |
+| `Turnstile-SiteKey` | Cloudflare Turnstile site key (public, stored centrally for config) |
+| `Turnstile-SecretKey` | Cloudflare Turnstile secret key (server-side verification) |
 
 **Access method:** Azure Managed Identity on Container Apps → Key Vault access policies. No secrets in app config or environment variables at runtime.
 
@@ -1235,6 +1246,32 @@ public class CfpApiTests : IClassFixture<CfpCompassWebApplicationFactory>
 
 ---
 
+### ADR-012: Bot Protection — Cloudflare Turnstile + Honeypot
+
+**Status:** Accepted
+
+**Date:** 2026-02-28
+
+**Context:** The CFP submission form is public-facing and unauthenticated. Bot protection is needed to prevent spam submissions into the admin moderation queue.
+
+**Decision:** Cloudflare Turnstile (invisible challenge) + hidden honeypot field (passive trap).
+
+**Rationale:** Privacy-first (no Google tracking, GDPR-compliant for international tech community), free/unlimited, zero false-positive risk from VPN users common in the developer community, layered with a zero-cost passive honeypot for additional coverage. Scored 4.70/5.00 in weighted decision matrix vs. reCAPTCHA v3 (4.15) and honeypot-only (2.80).
+
+**Integration:** Turnstile JS widget on submission form; server-side token verification via Cloudflare API from Blazor Server backend. Honeypot: hidden form field (CSS hidden, not type=hidden) checked server-side before processing.
+
+**Consequences:**
+- ✅ Prevents spam bot submissions without friction for legitimate users
+- ✅ Privacy-first: no third-party tracking; compliance with GDPR, LGPD, PIPEDA
+- ✅ Free tier: unlimited verifications, no cost dependency
+- ✅ Zero false positives for VPN/proxy users (unlike reCAPTCHA v3)
+- ✅ Layered defense: Turnstile for active bot detection, honeypot for passive traps
+- ⚠️ Adds Cloudflare as a dependency (low risk — free tier, no CDN requirement; separate from CDN)
+- ⚠️ Requires server-side validation integration into submission API
+- Mitigation: Honeypot fallback if Turnstile API becomes unavailable; no cookie consent banner required; no DPA required for current Cloudflare privacy policy
+
+---
+
 ## 13. Open Questions — Status
 
 ### Q1: Domain Name and SSL ✅ RESOLVED
@@ -1248,11 +1285,17 @@ public class CfpApiTests : IClassFixture<CfpCompassWebApplicationFactory>
 - Front Door: configured for `cfpcompass.com` + `www.cfpcompass.com`
 - Cookie domain: `.cfpcompass.com`
 
-### Q2: reCAPTCHA vs. Alternative Bot Protection ⏳ PENDING
+### Q2: Bot Protection ✅ RESOLVED
 
-**Status:** Chad is reviewing pros/cons of reCAPTCHA v3, Cloudflare Turnstile, and honeypot approaches. Decision pending.
+**Decision:** Cloudflare Turnstile + Honeypot hybrid.
 
-**Blocks:** Submission form implementation (Lambert), API submission endpoint (Ripley).
+- **Primary:** Cloudflare Turnstile (invisible, privacy-first, GDPR-compliant, free/unlimited, no Google dependency)
+- **Secondary:** Honeypot hidden form field (zero cost, zero external dependency, passive filter)
+- **Rationale:** Best fit for an international tech community audience (GDPR matters), aligns with the Azure stack (no Cloudflare proxy required), free at any CFP Compass scale
+
+**See:** ADR-012 for full decision record.
+
+**Unblocked:** Submission form implementation (Lambert), API submission endpoint (Ripley).
 
 ### Q3: Initial Reference Data Seeding ✅ RESOLVED
 
