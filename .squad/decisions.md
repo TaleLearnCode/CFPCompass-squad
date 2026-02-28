@@ -216,3 +216,51 @@ Feature count: 16 → 17
 All v3 changes marked in requirements.md with HTML comment: `<!-- Updated v3: [brief description] -->`
 
 ---
+
+## Submitter/Organizer Distinction & Organizer Claim Flow
+
+**Date:** 2026-02-28  
+**Author:** Brett (Requirements Analyst)  
+**Requested by:** Chad Green  
+**Status:** Merged into requirements v3.1 — Feature 2.3 (Organizer Claim Flow)  
+
+---
+
+### Summary
+
+Requirements v3.1 introduces a formal distinction between the person who submits a CFP listing to CFP Compass and the verified event organizer. Submitter is auto-captured at submission time; an "Are you the organizer?" checkbox controls whether the CFP enters normal moderation or "Unverified — Awaiting Organizer Claim" state. Organizers can claim listings via email verification, self-service claim button, or admin assignment.
+
+---
+
+### Key Decisions
+
+1. **Submitter Auto-Captured** — Recorded as authenticated user or contact email; not a form field
+2. **"Are You the Organizer?" Checkbox** — Default: Yes; if No, flags submission as community contribution
+3. **Organizer Contact Email (Conditional)** — Optional field shown when organizer is not the submitter; used for claim invitation email
+4. **Unverified Listings Visible But Flagged** — Published with status "Unverified — Awaiting Organizer Claim"
+5. **Claim Verification Via Email** — Organizer identity verified by sending email to Organizer Contact Email or Speaker Support Email
+6. **Admin-Assisted Claim Fallback** — Admins can manually assign organizer from dashboard; status becomes "Organizer Verified (Admin Assigned)"
+7. **Community Contributor Credit Retained** — Original submitter acknowledged even after organizer claims the listing
+
+---
+
+### New Listing Statuses
+
+- `Organizer Submitted` — Submitted by organizer themselves; normal moderation
+- `Unverified — Awaiting Organizer Claim` — Submitted by community contributor; organizer not yet claimed
+- `Organizer Verified` — Organizer completed self-service verification
+- `Organizer Verified (Admin Assigned)` — Admin manually assigned organizer ownership
+
+---
+
+### Impact by Team
+
+| Team | Impact |
+|------|--------|
+| **Ripley (Backend)** | New Submitter field; submission flag boolean; organizer contact email field; claim workflow endpoints; status transitions; claim invitation email trigger |
+| **Lambert (Frontend)** | "Are you the organizer?" toggle on form; conditional Organizer Contact Email field; "Claim This Event" button on listing detail; claim confirmation flow |
+| **Kane (Tester)** | Test submitter auto-capture; test community contributor path end-to-end; test claim invitation email; test admin-assisted claim; test status transitions |
+| **Dallas (Lead)** | Review claim verification design; confirm status consistency with existing moderation states |
+| **Parker (DevOps)** | ACS email template for claim invitation |
+
+---

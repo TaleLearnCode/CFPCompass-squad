@@ -169,3 +169,31 @@
 - Parker: APIM integration decision needed before Epic 5 (API) work begins
 - Total feature count raised to **17** (from 16 in v2)
 
+### 2026-02-28 — Requirements v3.1: Submitter/Organizer Distinction & Claim Flow
+
+**Task:** Chad Green requested two new requirements: tracking who submits vs. who owns a CFP listing, and a full organizer claim flow for community-submitted listings.
+
+**Key Changes Applied:**
+
+**1. Submitter/Organizer Distinction (Feature 2.1):**
+- Added **Submitter** to Auto-populated fields: the authenticated user account (or contact email) captured at submission time — never a user input field.
+- Added **"Are you the event organizer?"** boolean checkbox to Submission Flags group. Defaults to Yes. When No, submission is flagged "Unverified — Awaiting Organizer Claim."
+- Added **Organizer Contact Email** (conditional, shown only when organizer = No): used to send claim invitation on publish.
+- Updated Story 2.1.1 ACs to cover all three branches: organizer submitted, community submitted (unverified), and claim invitation email trigger.
+
+**2. Feature 2.3: Organizer Claim Flow (new):**
+- Story 2.3.1: Organizer self-service claim via email verification (Speaker Support Email or provided contact email).
+- Story 2.3.2: Admin-assisted claim — manual assignment of organizer-owner from admin dashboard.
+- Story 2.3.3: Claim invitation via email — system emails the organizer contact when CFP is published.
+- Listing statuses introduced: "Unverified — Awaiting Organizer Claim", "Organizer Verified", "Organizer Verified (Admin Assigned)".
+- Original submitter retains community contributor credit even after organizer claims ownership.
+
+**3. Community Contributor Persona (Personas table):**
+- Added Community Contributor: a speaker/community member who submits on behalf of an event they didn't organize; no ongoing ownership, receives credit, benefits from a comprehensive directory.
+
+**Patterns Applied:**
+- Submitter is auto-captured at submission time — never user-entered.
+- "Are you the organizer?" defaults to Yes to minimize friction for the common case.
+- Claim verification routes to Speaker Support Email (on listing) or Organizer Contact Email (from submission) — not to submitter's email.
+- Feature count raised to **18** (from 17 in v3).
+

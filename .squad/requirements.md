@@ -1,10 +1,10 @@
 # CFP Compass — Requirements Breakdown
 
 **Last Updated:** 2026-02-28  
-**Version:** v3  
+**Version:** v3.1  
 **Owner:** Brett (Requirements Analyst)  
 **Project:** CFP Compass — .NET 10 / Azure web application aggregating open Calls for Papers  
-**Features:** 17
+**Features:** 18
 
 ---
 
@@ -16,6 +16,7 @@
 | **Organizer** | Event organizer wanting to promote their CFP to a wider speaker audience | Get CFP in front of qualified speakers; fast approval process | Limited reach; waiting for approval; unclear submission requirements |
 | **Admin** | Platform moderator ensuring quality and accuracy of listed CFPs | Review and approve/reject submissions efficiently; maintain quality standards | Volume of submissions; need to verify legitimacy; inconsistent data from organizers |
 | **API Consumer** | Third-party developer or service integrating CFP data into their own tools | Reliable, versioned API access; read and write CFP data programmatically | API downtime; breaking changes; unclear authorization process |
+| **Community Contributor** | A speaker or community member who submits a CFP listing on behalf of an event they didn't organize | Contribute to CFP Compass being comprehensive and up-to-date; receive credit for their submission | No ongoing ownership of the listing; dependent on organizer to claim and manage it |
 
 ---
 
@@ -229,6 +230,7 @@
 ### Feature 2.1: Organizer Submission Form
 
 <!-- Updated v3: Expanded data model with comprehensive event/CFP fields including ISO/IANA standards, expense coverage, categorization, and organizer editing capability -->
+<!-- Updated v3.1: submitter/organizer distinction, "Are you the organizer?" checkbox, organizer contact email -->
 
 **Description:** Public form allowing event organizers to submit new CFPs for admin review. No account required — organizers identify themselves via a contact email field only.
 
@@ -270,6 +272,11 @@
 
 **Auto-populated (not user input):**
 - UN M.49 World Region — Automatically assigned by the system using the ISO 3166-1 → UN M.49 mapping table based on the submitted country code. This is backend-derived and is NOT a user-facing input field.
+- **Submitter** — Automatically recorded at submission time. Captured as the authenticated user account (if the submitter has an account) or as the contact email (if submitted without an account). This is NOT a field the submitter fills in.
+
+**Submission Flags (user input):**
+- **"Are you the event organizer?"** (boolean checkbox/toggle — defaults to **Yes**): If unchecked, the submitter is flagged as a community contributor, not the organizer. Submission is marked "Unverified — Awaiting Organizer Claim" pending organizer verification.
+- **Organizer Contact Email** (text, optional — shown only when "Are you the event organizer?" is **No**): The known email address for the event organizer; used to send a claim invitation when the CFP is published.
 
 #### User Story 2.1.1: Submit a New CFP
 
@@ -290,6 +297,15 @@
 - **And** country and country subdivision values are validated against ISO 3166 (only valid ISO 3166-1 alpha-2 country codes and ISO 3166-2 subdivision codes are accepted)
 - **And** time zone value is validated against the IANA Time Zone Database (only canonical IANA identifiers are accepted)
 - **And** the system automatically assigns the UN M.49 world region based on the submitted country code
+- **Given** a submitter completes the form and indicates they **are** the event organizer (default)
+- **When** the submission is saved
+- **Then** the submission proceeds through the normal moderation workflow with status "Organizer Submitted"
+- **Given** a submitter completes the form and indicates they are **NOT** the event organizer
+- **When** the submission is saved
+- **Then** the submission is flagged as "Unverified — Awaiting Organizer Claim" (pending organizer verification after approval)
+- **Given** a submitter provides an Organizer Contact Email and the submission is approved/published
+- **When** the CFP goes live
+- **Then** the system sends the organizer a claim invitation email to the provided Organizer Contact Email
 
 #### User Story 2.1.2: Form Validation
 
@@ -402,6 +418,65 @@
 - **Then** I see a "Reconsidering" badge on the submission
 - **And** I can view the organizer's edits and any previous rejection notes
 - **And** I can approve, reject again, or leave a note for further clarification
+
+---
+
+### Feature 2.3: Organizer Claim Flow
+
+<!-- Updated v3.1: organizer claim flow -->
+
+**Description:** Allows the verified event organizer to claim ownership of a CFP listing that was submitted by a community member (non-organizer). Once claimed, the organizer can edit the listing, manage future submissions for the same event, and receive notifications.
+
+#### User Story 2.3.1: Claim a CFP Listing
+
+**As an** event organizer  
+**I want to** claim a CFP listing that someone else submitted for my event  
+**So that I can** take ownership and manage it going forward
+
+**Acceptance Criteria:**
+
+- **Given** a CFP listing has been published and is flagged as "Unverified — Awaiting Organizer Claim"
+- **When** an organizer visits the listing and clicks "Claim This Event"
+- **Then** they are prompted to verify their identity as the organizer (e.g., via a verification email sent to the official Speaker Support Email on the listing, or to the Organizer Contact Email captured at submission time)
+- **Given** the organizer completes verification
+- **When** the claim is confirmed
+- **Then** the listing status updates to "Organizer Verified"
+- **And** the organizer's account is linked as the owner
+- **And** the original submitter retains credit as a community contributor
+- **Given** the claim is successful
+- **When** the organizer views the listing
+- **Then** they can edit all listing fields and submit changes for admin review (per the existing edit flow in Feature 2.1)
+
+#### User Story 2.3.2: Admin-Assisted Claim
+
+**As an** admin  
+**I want to** manually assign organizer ownership of a CFP listing  
+**So that I can** resolve disputed or unverified listings without waiting for self-service verification
+
+**Acceptance Criteria:**
+
+- **Given** a listing is in "Unverified — Awaiting Organizer Claim" status
+- **When** an admin navigates to the listing in the admin dashboard
+- **Then** they can search for and assign a registered user account as the organizer-owner
+- **Given** the admin assigns an owner
+- **When** the assignment is saved
+- **Then** the listing status changes to "Organizer Verified (Admin Assigned)"
+- **And** the assigned user receives a notification
+
+#### User Story 2.3.3: Claim Invitation via Email
+
+**As an** event organizer  
+**I want to** receive an email invitation to claim my event's CFP listing  
+**So that I can** be notified when a community member submits on my behalf
+
+**Acceptance Criteria:**
+
+- **Given** a submission is published and an organizer contact email was provided at submission time
+- **When** the CFP goes live
+- **Then** the system sends a "Someone submitted your CFP — claim it here" email to the organizer contact email with a unique claim link
+- **Given** the organizer clicks the claim link in the email
+- **When** they authenticate (or create an account)
+- **Then** they are taken directly to the claim confirmation flow for that listing (Story 2.3.1 verification step)
 
 ---
 
