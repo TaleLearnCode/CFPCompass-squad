@@ -4,6 +4,56 @@ _Maintained by Scribe. Agents write to `.squad/decisions/inbox/` — Scribe merg
 
 ---
 
+## System Architecture v1 — Tech Stack & ADRs Complete
+
+**Date:** 2026-02-28  
+**Author:** Dallas (Lead & Architect)  
+**Status:** Proposed — pending Chad Green review for 4 open questions  
+**Full document:** `.squad/architecture.md`
+
+---
+
+### Summary
+
+System architecture defined across 6 architectural decision records (ADRs):
+
+1. **ADR-001: Azure SQL Database (Serverless)** — Relational storage for CFPs, users, tracking, moderation
+2. **ADR-002: Blazor Server with .NET 10 SSR** — Frontend framework combining SEO + rich interactivity
+3. **ADR-003: ASP.NET Core Identity + Fido2NetLib** — Authentication with WebAuthn/FIDO2 passkeys + OAuth middleware
+4. **ADR-004: Azure Container Apps Jobs** — Background workers for digest, reminders, expiry, region assignment
+5. **ADR-005: Redis Basic C0** — Distributed caching for API responses and session state
+6. **ADR-006: APIM Consumption Tier** — Public API with built-in rate limiting, key management, developer portal
+
+### Open Questions for Chad Green
+
+| Question | Impact | Urgency |
+|----------|--------|---------|
+| Production domain name | Infra provisioning | High |
+| Bot protection strategy (reCAPTCHA v3 / Cloudflare Turnstile / honeypot) | Submission form | High |
+| Initial taxonomy definition (who defines category/topic lists) | DB seeding | Medium |
+| Email sender address/domain for ACS | Email implementation | High |
+
+### Decisions Locked In
+
+- **Compute:** .NET 10 / C# everywhere (backend + Blazor Server frontend)
+- **Storage:** Azure SQL + Redis + APIM for API caching
+- **Deployment:** Container Apps + Container Apps Jobs + APIM
+- **Auth:** ASP.NET Core Identity with passkey support (WebAuthn/FIDO2)
+- **Background Jobs:** Container Apps Jobs with Polly retry policies
+- **API Management:** APIM Consumption tier for rate limiting + key management
+
+### Impact by Team
+
+**Ripley (Backend):** Proceed with EF Core schema design on Azure SQL; passkey integration via Fido2NetLib; API rate limiting integrated with APIM
+
+**Lambert (Frontend):** Blazor Server enables C# UI; can leverage shared domain models with backend; SSR handles SEO for public CFP listings
+
+**Parker (DevOps):** Terraform IaC for Container Apps, SQL (Serverless), Redis Basic, APIM (Consumption), Key Vault, ACR; GitHub Actions CI/CD for containerized deployments
+
+**Kane (Tester):** Integration tests use WebApplicationFactory + SQL Server Docker container; test APIM rate limiting scenarios; passkey auth flow testing requires FIDO2 test harness
+
+---
+
 ## Resolved Open Questions — Requirements v2 Complete
 
 **Date:** 2026-02-28  
