@@ -1,8 +1,9 @@
 # CFP Compass — Requirements Breakdown
 
-**Last Updated:** 2026-02-28  
+**Last Updated:** 2026-02-28 v2  
 **Owner:** Brett (Requirements Analyst)  
 **Project:** CFP Compass — .NET 10 / Azure web application aggregating open Calls for Papers  
+**Features:** 16  
 
 ---
 
@@ -19,7 +20,7 @@
 
 ## Epics
 
-1. **CFP Discovery** — Enable speakers to find, browse, and track relevant CFPs
+1. **CFP Discovery** — Enable speakers to find, browse, and track relevant CFPs (Features 1.1–1.4)
 2. **CFP Submission & Moderation** — Allow organizers to submit CFPs and admins to review/approve them
 3. **User Accounts & Authentication** — Provide account creation, login, and profile management
 4. **Notifications & Reminders** — Send email notifications for deadlines and weekly digests
@@ -142,11 +143,47 @@
 
 ---
 
+### Feature 1.4: Past CFPs Archive
+
+**Description:** A browsable archive of expired and closed CFPs, enabling speakers to research a conference's CFP history, understand when an event typically runs its CFP, and anticipate when the next opening might occur.
+
+#### User Story 1.4.1: Browse the Past CFPs Archive
+
+**As a** speaker  
+**I want to** browse a list of expired and closed CFPs  
+**So that I can** discover past events and understand which conferences have previously sought speakers
+
+**Acceptance Criteria:**
+
+- **Given** I am on the CFP Compass site
+- **When** I navigate to the "Past CFPs" section
+- **Then** I see a list of all CFPs whose submission deadlines have passed by more than 7 days
+- **And** each entry displays: event name, submission deadline (past), event date(s), location, format, and primary topic tags
+- **And** the list is sorted by submission deadline (most recent first by default)
+- **And** I can filter the archive by topic, format, and location (same filter controls as the active listing)
+
+#### User Story 1.4.2: View CFP History for an Event
+
+**As a** speaker  
+**I want to** see the CFP history for a specific conference  
+**So that I can** understand when that event typically runs its CFP and anticipate when the next one might open
+
+**Acceptance Criteria:**
+
+- **Given** I am viewing a CFP entry (active or archived)
+- **When** I click "View CFP History" for that event
+- **Then** I see a chronological list of all archived CFPs from that event on CFP Compass
+- **And** each historical entry displays: year, submission deadline, event date(s), and a link to the archived CFP detail page
+- **And** if the event has only one archived entry, the history page still renders correctly with that single entry
+- **And** a note is displayed: "CFP history is based on submissions to CFP Compass and may not be complete"
+
+---
+
 ## Epic 2: CFP Submission & Moderation
 
 ### Feature 2.1: Organizer Submission Form
 
-**Description:** Public form allowing event organizers to submit new CFPs for admin review.
+**Description:** Public form allowing event organizers to submit new CFPs for admin review. No account required — organizers identify themselves via a contact email field only.
 
 #### User Story 2.1.1: Submit a New CFP
 
@@ -156,7 +193,9 @@
 
 **Acceptance Criteria:**
 
-- **Given** I am on the "Submit a CFP" page
+> ℹ️ **Decision 1 (Resolved):** No organizer account is required. The submission form is entirely public — contact email only.
+
+- **Given** I am on the "Submit a CFP" page (publicly accessible — no account or login required)
 - **When** I fill out the form with: event name, description, submission deadline, notification date, event date(s), location, format, topics, session types, official CFP URL, and my contact email
 - **And** I click "Submit"
 - **Then** my submission is saved with status "Pending Review"
@@ -334,7 +373,7 @@
 
 ### Feature 4.1: Deadline Reminders
 
-**Description:** Email notifications sent to users before CFP deadlines for favorited CFPs.
+**Description:** Email notifications sent to users before CFP deadlines for favorited CFPs. Notification delivery is controlled by a global account-level toggle.
 
 #### User Story 4.1.1: Receive Deadline Reminder
 
@@ -343,6 +382,8 @@
 **So that I don't** miss the submission window
 
 **Acceptance Criteria:**
+
+> ℹ️ **Decision 9 (Resolved):** Deadline reminders are controlled by a **global toggle only** (on/off in account settings). Per-CFP granularity is deferred to a future iteration.
 
 - **Given** I have favorited a CFP with a deadline in 7 days
 - **When** the system runs the daily reminder job
@@ -353,21 +394,21 @@
 #### User Story 4.1.2: Opt Out of Deadline Reminders
 
 **As a** logged-in speaker  
-**I want to** disable deadline reminders in my account settings  
+**I want to** disable all deadline reminders via a global toggle in my account settings  
 **So that I can** manage notifications according to my preference
 
 **Acceptance Criteria:**
 
 - **Given** I am logged in and on my account settings page
-- **When** I toggle "Deadline Reminders" to OFF and save
-- **Then** I no longer receive deadline reminder emails for favorited CFPs
+- **When** I toggle "Deadline Reminders" to OFF (global) and save
+- **Then** I no longer receive deadline reminder emails for any favorited CFPs
 - **And** I can re-enable reminders at any time
 
 ---
 
 ### Feature 4.2: Weekly Digest Email
 
-**Description:** Weekly email summarizing newly added CFPs and CFPs closing soon.
+**Description:** Weekly email summarizing newly added CFPs and CFPs closing soon. Delivery is controlled by a global account-level toggle.
 
 #### User Story 4.2.1: Receive Weekly Digest
 
@@ -376,6 +417,8 @@
 **So that I can** stay informed without visiting the site daily
 
 **Acceptance Criteria:**
+
+> ℹ️ **Decision 9 (Resolved):** The weekly digest is controlled by a **global toggle only** (on/off in account settings). Per-CFP digest controls are deferred to a future iteration.
 
 - **Given** I am a registered user with digest emails enabled
 - **When** the system runs the weekly digest job (every Sunday at 8 AM UTC)
@@ -388,13 +431,13 @@
 #### User Story 4.2.2: Opt Out of Weekly Digest
 
 **As a** logged-in speaker  
-**I want to** disable weekly digest emails in my account settings  
+**I want to** disable weekly digest emails via a global toggle in my account settings  
 **So that I can** control email frequency
 
 **Acceptance Criteria:**
 
 - **Given** I am logged in and on my account settings page
-- **When** I toggle "Weekly Digest" to OFF and save
+- **When** I toggle "Weekly Digest" to OFF (global) and save
 - **Then** I no longer receive weekly digest emails
 - **And** I can re-enable the digest at any time
 
@@ -404,7 +447,7 @@
 
 ### Feature 5.1: API Authentication & Authorization
 
-**Description:** Secure the API with token-based authentication; restrict write operations to authorized consumers.
+**Description:** Secure the API with token-based authentication; restrict write operations to authorized consumers. Rate limits: **100 requests/minute per API key** for read operations; **10 requests/minute per API key** for write operations.
 
 #### User Story 5.1.1: Authenticate API Access
 
@@ -418,6 +461,9 @@
 - **When** I include the API key in the `Authorization: Bearer <token>` header
 - **Then** I can access API endpoints scoped to my permission level (read-only or read-write)
 - **And** requests without a valid API key receive a `401 Unauthorized` response
+- **And** read operations are rate-limited to **100 requests/minute per API key**
+- **And** write operations are rate-limited to **10 requests/minute per API key**
+- **And** requests exceeding the rate limit receive a `429 Too Many Requests` response
 
 #### User Story 5.1.2: Request API Access
 
@@ -437,7 +483,7 @@
 
 ### Feature 5.2: API Endpoints — Read CFP Data
 
-**Description:** Provide GET endpoints for listing and retrieving CFP data.
+**Description:** Provide GET endpoints for listing and retrieving CFP data. All endpoints are versioned under `/api/v1/`.
 
 #### User Story 5.2.1: List All Approved CFPs
 
@@ -470,7 +516,7 @@
 
 ### Feature 5.3: API Endpoints — Submit & Update CFPs
 
-**Description:** Provide POST and PUT endpoints for authorized consumers to submit or update CFP data.
+**Description:** Provide POST and PUT endpoints for authorized consumers to submit or update CFP data. All endpoints are versioned under `/api/v1/`. All endpoints use URL path versioning (`/api/v1/`).
 
 #### User Story 5.3.1: Submit a CFP via API
 
@@ -556,39 +602,47 @@
 
 ---
 
-## Open Questions
+## Resolved Decisions
 
-The following ambiguities and decisions need clarification before development:
+### Decision 1: Organizer Account Requirement
+**Answer:** Public form + email only. No account required to submit a CFP.  
+**Impact:** Feature 2.1 (Organizer Submission Form) — form requires only a contact email field; no login gate for organizers.
 
-1. **Organizer Account Requirement:** Does an organizer need to create an account to submit a CFP, or is the submission form entirely public with just an email field?
-   - **Recommendation:** Start with public form + email; consider account requirement if spam becomes an issue.
+### Decision 2: CFP Expiration & Archive Policy
+**Answer:** Hide CFPs 7 days after submission deadline. Archive to a "Past CFPs" section. Speakers can browse the archive to see when an event's CFP last ran and anticipate when the next one might open.  
+**Impact:** Feature 1.1 (Public CFP Listing) — active listing hides CFPs 7+ days post-deadline. Feature 1.4 (Past CFPs Archive) — new feature added to Epic 1.
 
-2. **CFP Expiration Policy:** How long after the submission deadline should a CFP remain visible on the site? Should expired CFPs be archived or hidden automatically?
-   - **Recommendation:** Hide CFPs 7 days after deadline; archive to a separate "Past CFPs" section accessible via link.
+### Decision 3: API Rate Limits
+**Answer:** 100 requests/minute per API key for read operations; 10 requests/minute per API key for write operations. Requests exceeding limits receive `429 Too Many Requests`.  
+**Impact:** Feature 5.1 (API Authentication & Authorization) — rate limit enforcement is part of the API auth spec.
 
-3. **API Rate Limiting:** What rate limits should apply to API consumers? Per key? Per endpoint?
-   - **Recommendation:** 100 requests/minute per API key for read operations; 10 requests/minute for write operations.
+### Decision 4: Admin Account Creation
+**Answer:** Environment config (list of admin emails) for MVP. No admin management UI in initial scope.  
+**Impact:** Feature 6.1 (Admin Dashboard) — admin identity is config-driven, not role-assigned via UI.
 
-4. **Admin Role Assignment:** How are admin accounts created? Via manual database entry, a super-admin UI, or environment config?
-   - **Recommendation:** Start with environment config (list of admin emails); add admin management UI in a later iteration.
+### Decision 5: Email Service Provider
+**Answer:** Azure Communication Services (ACS) for all transactional and digest email (deadline reminders, digest, approval/rejection notifications).  
+**Impact:** Epic 4 (Notifications & Reminders), Feature 2.2 (Admin Moderation Workflow email confirmations).
 
-5. **Email Service Provider:** Which email service will handle transactional and digest emails? Azure Communication Services, SendGrid, or other?
-   - **Recommendation:** Use Azure Communication Services for Azure-native integration.
+### Decision 6: CFP Event Date Schema
+**Answer:** Optional `startDate` / `endDate` fields. Both may be null if the event date is TBD.  
+**Impact:** Feature 1.1 (CFP detail page), Feature 2.1 (submission form), Features 5.2/5.3 (API schema — `eventDate` object with optional startDate/endDate).
 
-6. **CFP Data Schema — Event Date:** Should we support single-day events, date ranges, or "TBD" for events without confirmed dates?
-   - **Recommendation:** Support optional date range (startDate, endDate); allow null if TBD.
+### Decision 7: API Versioning Strategy
+**Answer:** URL path versioning: `/api/v1/`. Simple and discoverable.  
+**Impact:** Features 5.2/5.3 (API Endpoints) — all endpoints prefixed with `/api/v1/`.
 
-7. **API Versioning Strategy:** How should the API be versioned? URL path (`/api/v1/`), header (`Accept: application/vnd.cfpcompass.v1+json`), or query param?
-   - **Recommendation:** Use URL path versioning (`/api/v1/`) for simplicity and discoverability.
+### Decision 8: Duplicate CFP Detection
+**Answer:** Manual admin review. Admin UI flags potential duplicates when an exact official URL match is found on an incoming submission.  
+**Impact:** Feature 2.2 (Admin Moderation Workflow) — admin UI shows a duplicate flag; no automated merge.
 
-8. **Duplicate CFP Detection:** How should the system handle submissions for the same event? Manual admin review, or automated duplicate detection by URL or event name?
-   - **Recommendation:** Manual review initially; flag potential duplicates in admin UI if exact URL match found.
+### Decision 9: Notification Preferences Granularity
+**Answer:** Global toggle for MVP (all reminders on/off, digest on/off). Per-CFP controls deferred to a later iteration.  
+**Impact:** Features 4.1/4.2 (Deadline Reminders & Weekly Digest) — settings are account-level toggles only; no per-CFP opt-out in MVP.
 
-9. **User Notification Preferences — Granularity:** Should users be able to opt in/out of reminders per CFP, or only globally?
-   - **Recommendation:** Global setting initially; per-CFP controls can be added later based on user feedback.
-
-10. **Multi-Language Support:** Will CFPs be in multiple languages, and should the platform support localization?
-    - **Recommendation:** English-only for MVP; add i18n if international adoption requires it.
+### Decision 10: Internationalization
+**Answer:** English-only content for MVP. i18n architecture (resource files, locale-aware rendering) must be built in from day 1 — no hard-coded strings in UI.  
+**Impact:** All UI-facing features — no string literals in UI code; resource files required from the start.
 
 ---
 
