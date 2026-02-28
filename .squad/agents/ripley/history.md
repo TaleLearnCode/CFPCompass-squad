@@ -19,7 +19,9 @@
 
 ## Latest Context (2026-02-28)
 
-**Brett Requirements Delivered:** Requirements breakdown now available at `.squad/requirements.md` — 6 epics, 15 features, 30+ user stories with Given/When/Then acceptance criteria. **Consult before starting backend implementation.** Includes 10 flagged open questions requiring team decision. API endpoint specs, authentication model, and email trigger conditions all documented.
+**Brett Requirements v1 Delivered:** Requirements breakdown initially available at `.squad/requirements.md` — 6 epics, 15 features, 30+ user stories with Given/When/Then acceptance criteria. Included 10 flagged open questions requiring team decision.
+
+**Brett Requirements v2 Complete:** All 10 open questions resolved by Chad Green and integrated. Feature 1.4 (Past CFPs Archive) added. **Consult requirements.md v2 before backend implementation.** Critical backend change: API must support i18n from day 1 — all string fields (CFP title, description, organizer name, etc.) must be properly localized. No hard-coded strings.
 
 ## Learnings
 

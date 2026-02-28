@@ -16,4 +16,8 @@
 - UI framework: Razor Pages or Blazor — TBD by Dallas; follow whatever is decided
 - Clean, responsive, accessible design expected from Chad
 
+## Latest Context (2026-02-28)
+
+**Brett Requirements v2 Complete:** All 10 open questions resolved by Chad Green and integrated into `.squad/requirements.md`. Feature 1.4 (Past CFPs Archive) added. **Consult requirements.md v2 before frontend implementation.** Critical frontend change: UI must support i18n from day 1 — no hard-coded strings in components. All user-facing text must be translatable.
+
 ## Learnings

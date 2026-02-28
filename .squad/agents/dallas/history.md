@@ -20,7 +20,9 @@
 
 ## Latest Context (2026-02-28)
 
-**Brett Requirements Delivered:** Requirements breakdown now available at `.squad/requirements.md` — 6 epics, 15 features, 30+ user stories with Given/When/Then acceptance criteria. **Consult before starting implementation.** Includes 10 flagged open questions requiring team decision.
+**Brett Requirements v1 Delivered:** Requirements breakdown initially available at `.squad/requirements.md` — 6 epics, 15 features, 30+ user stories with Given/When/Then acceptance criteria. Included 10 flagged open questions requiring team decision.
+
+**Brett Requirements v2 Complete:** All 10 open questions resolved by Chad Green and integrated. Feature 1.4 (Past CFPs Archive) added. **Consult requirements.md v2 before implementation.** Critical architectural change: i18n support must be built in from day 1 — no hard-coded strings in any tier.
 
 ## Learnings
 

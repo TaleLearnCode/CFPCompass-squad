@@ -17,4 +17,8 @@
 - CI/CD: GitHub Actions — build, test, containerize, push to ACR, deploy to Container Apps
 - Environments: at minimum dev + prod; staging desirable
 
+## Latest Context (2026-02-28)
+
+**Brett Requirements v2 Complete:** All 10 open questions resolved by Chad Green and integrated into `.squad/requirements.md`. Feature 1.4 (Past CFPs Archive) added. **Consult requirements.md v2 before infrastructure implementation.** Critical infrastructure change: Ensure i18n architecture is built in from day 1 — consider localization strategy for app configuration, resource names, and regional deployments.
+
 ## Learnings

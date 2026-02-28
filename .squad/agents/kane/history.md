@@ -18,7 +18,9 @@
 
 ## Latest Context (2026-02-28)
 
-**Brett Requirements Delivered:** Requirements breakdown now available at `.squad/requirements.md` — 6 epics, 15 features, 30+ user stories with Given/When/Then acceptance criteria. **Consult for test case derivation.** Acceptance criteria in Given/When/Then format; use directly to drive test design. 30+ stories provide comprehensive coverage matrix for unit and integration tests.
+**Brett Requirements v1 Delivered:** Requirements breakdown initially available at `.squad/requirements.md` — 6 epics, 15 features, 30+ user stories with Given/When/Then acceptance criteria. Acceptance criteria in Given/When/Then format; use directly to drive test design.
+
+**Brett Requirements v2 Complete:** All 10 open questions resolved by Chad Green and integrated. Feature 1.4 (Past CFPs Archive) added. **Consult requirements.md v2 for comprehensive test case derivation.** Critical test focus: i18n must be testable from day 1 — test cases must verify proper localization of all UI strings and API response strings across multiple languages/regions.
 
 ## Learnings
 
