@@ -2,9 +2,9 @@
 title: System Context & Logical Components
 summary: System context and logical component model for [System/Service Name].
 tags:
-	- system-context
-	- logical-components
-	- architecture
+  - system-context
+  - logical-components
+  - architecture
 ---
 
 # System Context & Logical Components
