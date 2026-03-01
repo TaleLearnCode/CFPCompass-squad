@@ -1,11 +1,11 @@
-
+---
 title: Infrastructure Overview
 summary: [1-sentence description of infrastructure overview scope]
 tags:
-	- infrastructure-overview  # Required
-	- architecture             # Required
-	- [domain-specific tags]   # e.g., integration, cloud, platform
-	- [capability tags]        # e.g., governance, security, observability
+  - infrastructure-overview  # Required
+  - architecture             # Required
+  - [domain-specific tags]   # e.g., integration, cloud, platform
+  - [capability tags]        # e.g., governance, security, observability
 ---
 
 # Infrastructure Overview Template
