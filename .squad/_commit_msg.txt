@@ -1,3 +1,0 @@
-chore: squad logs and decisions for issue #1 blob storage MI work
-
-Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>
