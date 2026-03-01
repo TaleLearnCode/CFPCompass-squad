@@ -27,3 +27,12 @@
 
 ## Learnings
 
+### Issue #1 — Blob Storage via Managed Identity (2026-03-01)
+
+- **Pattern:** .NET Aspire's `AddAzureBlobServiceClient("blobs")` handles DefaultAzureCredential injection automatically — no manual `new DefaultAzureCredential()` needed in application code.
+- **Local dev:** `RunAsEmulator()` in AppHost wires Azurite; no credentials or config needed for local runs.
+- **Greenfield advantage:** No SAS token cleanup required — MI pattern adopted from day one.
+- **Aspire resource name matters:** The string `"blobs"` passed to `AddAzureBlobServiceClient` must match the `AddBlobs("blobs")` name in AppHost exactly. Mismatch = runtime failure.
+- **ServiceDefaults project naming:** `<IsAspireSharedProject>true</IsAspireSharedProject>` is required in the `.csproj` so Aspire tooling treats it correctly at build time.
+- **Architecture naming:** The architecture doc uses `CFPCompass.{Layer}` (capitalized) but issue #1 explicitly requested `CfpCompass.{Layer}`. This scaffold follows the issue; future projects should reconcile with Dallas/Chad.
+

@@ -251,10 +251,10 @@ Azure Front Door → APIM
 
 | Resource | Identity | Grants |
 |----------|---------|--------|
-| Container App (Web) | System-assigned | Key Vault: `secrets/get`; Storage: `Storage Blob Data Contributor` |
-| Container App (API) | System-assigned | Key Vault: `secrets/get`; Service Bus: `Azure Service Bus Data Sender`; ACR: `AcrPull`; Storage: `Storage Blob Data Contributor` |
-| Container Apps Jobs | System-assigned | Key Vault: `secrets/get`; Azure SQL: `db_datareader`, `db_datawriter`; Storage: `Storage Blob Data Contributor` |
-| Azure Functions | System-assigned | Key Vault: `secrets/get`; Service Bus: `Azure Service Bus Data Receiver`; Azure SQL: `db_datawriter` |
+| Container App (Web) | System-assigned | Key Vault: `secrets/get`; Azure Blob Storage: `Storage Blob Data Reader` |
+| Container App (API) | System-assigned | Key Vault: `secrets/get`; Service Bus: `Azure Service Bus Data Sender`; ACR: `AcrPull`; Azure Blob Storage: `Storage Blob Data Contributor` |
+| Container Apps Jobs | System-assigned | Key Vault: `secrets/get`; Azure SQL: `db_datareader`, `db_datawriter` |
+| Azure Functions | System-assigned | Key Vault: `secrets/get`; Service Bus: `Azure Service Bus Data Receiver`; Azure SQL: `db_datawriter`; Azure Blob Storage: `Storage Blob Data Contributor` |
 
 > **Blob Storage access (Issue #1, 2026-03-01):** SAS tokens have been replaced with `Storage Blob Data Contributor` RBAC assignments on the Container App managed identities. All blob operations use `DefaultAzureCredential` via the `Aspire.Azure.Storage.Blobs` integration package. SAS token generation and the `Storage-ConnectionString` Key Vault secret should be removed once all environments confirm MI-based access. RBAC assignments are managed by the `blob-storage-rbac` Terraform module. See [GitHub Issue #1](https://github.com/TaleLearnCode/CFPCompass-squad/issues/1).
 

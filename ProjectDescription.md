@@ -28,3 +28,4 @@ The platform exposes a public, RESTful API that allows authorized consumers to r
 - **Infrastructure as Code using Terraform**
 - **CI/CD pipelines implemented with GitHub Actions**
 - Clean, maintainable, cloud‑native architecture with clear separation of concerns
+- Use Aspire 13.1

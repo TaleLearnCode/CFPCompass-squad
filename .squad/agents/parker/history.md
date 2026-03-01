@@ -46,3 +46,11 @@ Parker's three MI GitHub issues merged into `.squad/decisions.md` with orchestra
 **Cross-agent awareness:** Dallas (Agent 11) aware of Parker's MI work; noted in ADR-015 decision and infrastructure overview update. Ash unaware of MI gaps (Technical Writer focus); not relevant to documentation scope.
 
 ## Learnings
+
+### Issue #1 — Blob Storage RBAC (2026-03-01)
+
+- **All three Container Apps need Blob Storage access:** `CfpCompass.Api` (upload/read logos), `CfpCompass.Web` (read logos for CDN), `CfpCompass.Workers` (write digests/exports). Assigned `Storage Blob Data Contributor` to all three — simpler and forward-proof.
+- **`uuidv5` for deterministic role assignment names:** Using `uuidv5("url", ...)` on a composite key prevents Terraform from generating a new UUID on each plan, avoiding unnecessary drift and re-creation of role assignments.
+- **Docs were already rich:** `docs/infrastructure/architecture.md` already existed with a detailed Managed Identity wiring table. Surgical edits only — no wholesale rewrites needed.
+- **Ripley owns the application side:** SDK switch (`Aspire.Azure.Storage.Blobs`), `DefaultAzureCredential` wiring, and SAS token removal are Ripley's scope. Parker's work (Terraform RBAC) is a prerequisite, not the whole fix. The issue acceptance criteria span both agents.
+- **Decisions inbox:** Summary written to `.squad/decisions/inbox/parker-issue1-blob-mi.md`.

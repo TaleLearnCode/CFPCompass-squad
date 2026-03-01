@@ -51,6 +51,8 @@ if ($LASTEXITCODE -ne 0) {
 $projectNumber = $null
 if ($projectOutput -match '#(\d+)') {
     $projectNumber = $matches[1]
+} elseif ($projectOutput -match '/projects/(\d+)') {
+    $projectNumber = $matches[1]
 } elseif ($projectOutput -match '(\d+)$') {
     $projectNumber = $matches[1]
 }
@@ -64,20 +66,49 @@ if (-not $projectNumber) {
 
 Write-Host "OK: Project created: #$projectNumber" -ForegroundColor Green
 
-# Add Status field with workflow stages
-Write-Host "[3/3] Adding Status field with workflow stages..." -ForegroundColor Yellow
-$statusOptions = $WorkflowStages -join ","
-$fieldOutput = & gh project field-create $projectNumber `
-    --owner $Owner `
-    --name "Status" `
-    --data-type "SINGLE_SELECT" `
-    --single-select-options $statusOptions 2>&1
+# Configure Status field with workflow stages via GraphQL
+# (GitHub Projects V2 "Status" is a built-in reserved field — it must be updated, not created)
+Write-Host "[3/3] Configuring Status field with workflow stages..." -ForegroundColor Yellow
 
-if ($LASTEXITCODE -ne 0) {
-    Write-Host "WARN: Status field creation returned non-zero: $fieldOutput" -ForegroundColor Yellow
-    Write-Host "  Project #$projectNumber was created. Add the Status field manually in the GitHub Projects UI." -ForegroundColor Yellow
+$fieldData = & gh project field-list $projectNumber --owner $Owner --format json 2>&1 | ConvertFrom-Json
+$statusField = $fieldData.fields | Where-Object { $_.name -eq "Status" }
+
+if (-not $statusField) {
+    Write-Host "FAIL: Status field not found on project #$projectNumber" -ForegroundColor Red
+    exit 1
+}
+
+$token = & gh auth token
+$headers = @{
+    Authorization = "Bearer $token"
+    "Content-Type" = "application/json"
+}
+
+$optionColors = @("GRAY","BLUE","YELLOW","ORANGE","PURPLE","GREEN")
+$optionDescriptions = @(
+    "Not yet started or prioritized"
+    "OpenAPI/AsyncAPI spec being authored"
+    "Spec PR open, awaiting approval"
+    "Implementation underway; spec approved"
+    "PR open, awaiting code review"
+    "Merged and complete"
+)
+$options = for ($i = 0; $i -lt $WorkflowStages.Count; $i++) {
+    @{ name = $WorkflowStages[$i]; color = $optionColors[$i]; description = $optionDescriptions[$i] }
+}
+
+$body = @{
+    query = 'mutation($fieldId:ID!,$options:[ProjectV2SingleSelectFieldOptionInput!]!){updateProjectV2Field(input:{fieldId:$fieldId,singleSelectOptions:$options}){projectV2Field{... on ProjectV2SingleSelectField{name options{name}}}}}'
+    variables = @{ fieldId = $statusField.id; options = $options }
+} | ConvertTo-Json -Depth 10 -Compress
+
+$response = Invoke-RestMethod -Uri "https://api.github.com/graphql" -Method POST -Headers $headers -Body $body
+
+if ($response.errors) {
+    Write-Host "WARN: Could not update Status field via API. Configure manually in the GitHub Projects UI." -ForegroundColor Yellow
+    Write-Host "  Stages to add: $($WorkflowStages -join ', ')" -ForegroundColor Yellow
 } else {
-    Write-Host "OK: Status field created with stages:" -ForegroundColor Green
+    Write-Host "OK: Status field configured with stages:" -ForegroundColor Green
     $WorkflowStages | ForEach-Object { Write-Host "  - $_" -ForegroundColor Green }
 }
 
