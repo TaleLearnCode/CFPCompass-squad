@@ -1,15 +1,15 @@
 # CFP Compass — System Architecture
 
-**Version:** v2.0  
+**Version:** v3.0  
 **Author:** Dallas (Lead & Architect)  
-**Date:** 2026-02-28 (v1.0), updated 2026-03-01 (v2.0)  
-**Status:** Active — Chad Green open questions resolved; event-driven write pattern adopted
+**Date:** 2026-02-28 (v1.0), updated 2026-03-01 (v2.0), updated 2026-03-01 (v3.0)  
+**Status:** Active — .NET Aspire 13.1 adopted for orchestration and observability
 
 ---
 
 ## 1. Solution Overview
 
-CFP Compass is a .NET 10, Azure-hosted web application that aggregates open Calls for Papers (CFPs) for community speakers. Organizers submit CFPs through a public form; admins moderate submissions before publication. Authenticated speakers track CFPs through a 3-state workflow (Interested → Submitted → Accepted), receive deadline reminders and weekly digests via email, and browse a historical archive of past CFPs. A public REST API enables third-party integrations. The system enforces international standards (ISO 3166, IANA Time Zones, UN M.49) and supports an organizer claim flow for community-contributed listings.
+CFP Compass is a .NET 10, Azure-hosted web application (orchestrated locally via **.NET Aspire 13.1**) that aggregates open Calls for Papers (CFPs) for community speakers. Organizers submit CFPs through a public form; admins moderate submissions before publication. Authenticated speakers track CFPs through a 3-state workflow (Interested → Submitted → Accepted), receive deadline reminders and weekly digests via email, and browse a historical archive of past CFPs. A public REST API enables third-party integrations. The system enforces international standards (ISO 3166, IANA Time Zones, UN M.49) and supports an organizer claim flow for community-contributed listings.
 
 ### Event-Driven Write Architecture
 
@@ -138,6 +138,15 @@ CFPCompass.sln
 │       ├── CacheInvalidationProcessor.cs   # Invalidates APIM/Redis caches after writes
 │       └── host.json                       # Functions host configuration
 │
+├── apphost/
+│   └── CFPCompass.AppHost/                 # .NET Aspire AppHost (dev/test orchestrator)
+│       ├── Program.cs                      # Declares full service topology via AddProject<T>(), AddContainer(), Azure resource abstractions
+│       └── appsettings.json               # Local dev configuration overrides
+│
+├── servicedefaults/
+│   └── CFPCompass.ServiceDefaults/         # .NET Aspire ServiceDefaults (shared configuration)
+│       └── Extensions.cs                   # AddServiceDefaults() extension — OpenTelemetry, health checks, resilience, service discovery
+│
 ├── tests/
 │   ├── CFPCompass.Domain.Tests/            # xUnit — domain logic
 │   ├── CFPCompass.Application.Tests/       # xUnit — service layer, validators
@@ -176,7 +185,7 @@ CFPCompass.sln
 ### Naming Conventions
 
 - **Namespaces:** `CFPCompass.{Layer}.{Feature}` — e.g., `CFPCompass.Application.Services`, `CFPCompass.Infrastructure.Data`
-- **Projects:** `CFPCompass.{Layer}` — Domain, Application, Infrastructure, Api, Web, Workers
+- **Projects:** `CFPCompass.{Layer}` — Domain, Application, Infrastructure, Api, Web, Workers, Functions, AppHost, ServiceDefaults
 - **Test projects:** `CFPCompass.{Layer}.Tests`
 - **Terraform modules:** lowercase kebab-case — `container-apps`, `key-vault`
 
@@ -193,6 +202,8 @@ Domain (innermost) → Application → Infrastructure / Api / Web / Workers (out
 - **Infrastructure** implements data access, email, storage, caching
 - **Api** and **Web** are thin entry points that wire up DI and delegate to Application services
 - **Workers** uses the same Application services for background processing
+- **ServiceDefaults** is consumed by all service projects (Api, Web, Workers, Functions) via `builder.AddServiceDefaults()` — provides OpenTelemetry, health checks, resilience, and service discovery
+- **AppHost** orchestrates all services and containers for local development — not deployed to production
 
 ---
 
@@ -345,6 +356,8 @@ Domain (innermost) → Application → Infrastructure / Api / Web / Workers (out
 - Redis is used for distributed scenarios; in-memory for single-instance reference data
 
 **Note:** Azure Managed Redis replaces the retired Azure Cache for Redis. Alternatively, a containerized Redis instance can run as a Container App alongside the main app if Azure Managed Redis pricing is unacceptable at scale.
+
+**Aspire Integration Packages:** In local development, connection strings for Redis, Service Bus, and Azure SQL are injected automatically by the Aspire AppHost resource model (`AddAzureRedis()`, `AddAzureServiceBus()`, `AddAzureSqlServer()`). Manual `IConfiguration` wiring is replaced by Aspire's resource abstractions in dev; in production, the same Aspire integration packages (`Aspire.StackExchange.Redis`, `Aspire.Azure.Messaging.ServiceBus`, `Aspire.Azure.Data.Sql`) read connection strings from environment variables and Key Vault as normal. Health check registration for each dependency is automatic via the integration packages.
 
 ---
 
@@ -872,7 +885,7 @@ Internet
 ### Container Registry
 
 - **Azure Container Registry (Basic tier)**
-- Images: `cfpcompass-web`, `cfpcompass-api`, `cfpcompass-workers`, `cfpcompass-functions`
+- Images: `cfpcompass-web`, `cfpcompass-api`, `cfpcompass-workers`, `cfpcompass-functions` (AppHost and ServiceDefaults are NOT containerized — AppHost is dev-only; ServiceDefaults is a class library consumed at build time)
 - Tags: `latest`, `{git-sha}`, `{semver}`
 - GitHub Actions pushes images on merge to `main`
 - Container Apps configured to pull from ACR via managed identity
@@ -919,7 +932,84 @@ infra/
 
 ---
 
-## 10. Security Considerations
+## 10. Observability
+
+### OpenTelemetry via ServiceDefaults
+
+All service projects (Api, Web, Workers, Functions) call `builder.AddServiceDefaults()` at startup. This configures:
+
+- **Traces:** Distributed tracing via `System.Diagnostics.Activity` propagated across HTTP, Service Bus, and Azure SDK calls. Trace context flows automatically from Api → Service Bus → Functions, enabling end-to-end request correlation.
+- **Metrics:** Runtime metrics (CPU, memory, GC), HTTP request metrics, and custom application metrics exported via OpenTelemetry protocol (OTLP).
+- **Logs:** Structured logging integrated with OpenTelemetry. Serilog serves as the logging provider; logs are correlated with traces via `Activity.TraceId`.
+
+### Local Development — Aspire Dashboard
+
+During local development, the Aspire Dashboard is automatically available at `https://localhost:18888` when running via AppHost. It provides:
+
+- Real-time structured log viewer across all services
+- Distributed trace explorer with span waterfall visualization
+- Metrics dashboards for all service projects
+- No additional setup — powered by OTLP exporters configured in ServiceDefaults
+
+### Production — Azure Monitor / Application Insights
+
+In production, OpenTelemetry exporters in ServiceDefaults send telemetry to **Azure Monitor / Application Insights** (controlled by environment configuration):
+
+- **Traces → Application Insights** — distributed tracing, dependency tracking, request/response telemetry
+- **Metrics → Azure Monitor** — custom and runtime metrics, alerting
+- **Logs → Azure Log Analytics** — structured logs via Serilog → OpenTelemetry exporter
+
+The switch from Aspire Dashboard (dev) to Azure Monitor (production) is configuration-only — no code changes required.
+
+### Health Check Endpoints
+
+`AddServiceDefaults()` auto-configures health check endpoints:
+
+- `/health` — aggregate health status of all registered dependencies (SQL, Redis, Service Bus, etc.)
+- `/alive` — liveness probe for container orchestration (Container Apps)
+
+Aspire integration packages (`Aspire.Azure.Data.Sql`, `Aspire.StackExchange.Redis`, `Aspire.Azure.Messaging.ServiceBus`) automatically register health checks for their respective dependencies.
+
+### Distributed Tracing Across Service Boundaries
+
+Trace correlation flows across the full write path:
+
+```
+Api (HTTP request) → Service Bus (publish) → Functions (subscribe + process) → Azure SQL (write)
+```
+
+`Activity` propagation via W3C `traceparent` headers ensures a single trace ID spans the entire operation. The Aspire Dashboard (dev) and Application Insights (prod) visualize this as a single distributed trace.
+
+---
+
+## 11. Local Development
+
+### Single-Command Startup via Aspire AppHost
+
+`dotnet run --project src/apphost/CFPCompass.AppHost` launches the full local development stack:
+
+| Service | How Aspire Runs It |
+|---------|--------------------|
+| **CfpCompass.Api** | `AddProject<CfpCompass.Api>()` — .NET project |
+| **CfpCompass.Web** | `AddProject<CfpCompass.Web>()` — .NET project |
+| **CfpCompass.Workers** | `AddProject<CfpCompass.Workers>()` — .NET project |
+| **CfpCompass.Functions** | `AddProject<CfpCompass.Functions>()` — .NET project |
+| **Azure SQL** | SQL Server container or `AddAzureSqlServer()` resource |
+| **Redis** | Local container via `AddAzureRedis()` |
+| **Service Bus** | Service Bus emulator or Azurite via `AddAzureServiceBus()` |
+| **Aspire Dashboard** | Auto-launched at `https://localhost:18888` |
+
+**Prerequisites:**
+- .NET Aspire workload installed: `dotnet workload install aspire`
+- Docker Desktop (for containerized dependencies)
+
+**Service discovery:** Aspire injects service URLs and connection strings automatically — no manual configuration of `appsettings.Development.json` for inter-service communication.
+
+**Note:** AppHost is a dev/test-only orchestrator. Production deployments use Azure Container Apps + Terraform as defined in Section 9. AppHost is excluded from production Docker builds and CI/CD deployment pipelines.
+
+---
+
+## 12. Security Considerations
 
 ### Threat Model Highlights
 
@@ -993,7 +1083,7 @@ App-level rate limits (defense in depth):
 
 ---
 
-## 11. Testing Strategy
+## 13. Testing Strategy
 
 ### Unit Tests
 
@@ -1055,7 +1145,7 @@ public class CfpApiTests : IClassFixture<CfpCompassWebApplicationFactory>
 
 ---
 
-## 12. Key Architecture Decisions (ADR-Style)
+## 14. Key Architecture Decisions (ADR-Style)
 
 ### ADR-001: Azure SQL Database over Cosmos DB
 
@@ -1272,7 +1362,55 @@ public class CfpApiTests : IClassFixture<CfpCompassWebApplicationFactory>
 
 ---
 
-## 13. Open Questions — Status
+### ADR-013: .NET Aspire 13.1 for Orchestration and Observability
+
+**Status:** Accepted
+
+**Date:** 2026-03-01
+
+**Context:** CFP Compass is a multi-service distributed application (API, web frontend, background workers, Azure Functions, Redis, Service Bus, Azure SQL). Without a developer orchestration layer, each developer must manually start, configure, and connect all services. Observability across service boundaries is also a cross-cutting concern that must be consistent.
+
+**Decision:** Adopt .NET Aspire 13.1 for:
+1. Local development orchestration (AppHost)
+2. Shared observability baseline (ServiceDefaults)
+3. Azure integration packages (replacing manual SDK configuration)
+
+**Rationale:**
+- AppHost provides a single `dotnet run` entry point for the full local stack — no Docker Compose files or manual setup scripts
+- ServiceDefaults enforces consistent OpenTelemetry, health checks, and resilience across all service projects without per-project boilerplate
+- Aspire 13.1 targets .NET 10 — version alignment with the project stack
+- Azure integration packages (`Aspire.Azure.*`) provide configuration injection, health checks, and telemetry for all Azure dependencies out of the box
+- Aspire Dashboard gives each developer distributed tracing and log correlation for free during development
+- Cloud-agnostic at runtime — Aspire is a dev/test orchestrator; production deployments use Azure Container Apps + Terraform as already decided
+
+**Implementation notes:**
+- Solution adds two projects: CfpCompass.AppHost (orchestrator, dev-only) and CfpCompass.ServiceDefaults (shared defaults, included in all service projects)
+- All service projects (Api, Web, Workers, Functions) call `builder.AddServiceDefaults()` at startup
+- AppHost references: `Aspire.Hosting.Azure.ServiceBus`, `Aspire.Hosting.Azure.Redis`, `Aspire.Hosting.Azure.Sql`, `Aspire.Hosting.Azure.CommunicationServices`
+- Service projects reference integration packages: `Aspire.Azure.Messaging.ServiceBus`, `Aspire.StackExchange.Redis`, `Aspire.Azure.Data.Sql`
+- Production: AppHost is NOT deployed. OpenTelemetry exporters in ServiceDefaults send to Azure Monitor in production (controlled by environment config)
+- AppHost not included in CI/CD deployment pipeline — dev tooling only
+
+**Consequences:**
+- ✅ Single-command local startup: `dotnet run --project CfpCompass.AppHost` launches all services, containers, and the Aspire Dashboard
+- ✅ Consistent observability baseline across all service projects — no per-project OpenTelemetry boilerplate
+- ✅ Health check endpoints (`/health`, `/alive`) auto-configured for all services
+- ✅ Distributed tracing across Api → Service Bus → Functions with automatic `Activity` propagation
+- ✅ Aspire integration packages handle connection string injection, health checks, and telemetry for Azure dependencies
+- ✅ Version-aligned: Aspire 13.1 targets .NET 10
+- ⚠️ Two additional projects in the solution (AppHost, ServiceDefaults)
+- ⚠️ Developers need .NET Aspire workload installed: `dotnet workload install aspire`
+- ⚠️ AppHost excluded from production Docker builds and Terraform IaC (dev-only)
+- REQUIRED: All service projects must call `AddServiceDefaults()` — enforce via PR review
+
+**Alternatives considered:**
+- Docker Compose: Rejected — no .NET-native integration packages, no distributed tracing out of the box, no Aspire Dashboard
+- Manual startup scripts: Rejected — fragile, per-developer, no shared observability baseline
+- Aspire alone without Azure Container Apps: Rejected — Aspire does not replace production hosting; both serve different purposes
+
+---
+
+## 15. Open Questions — Status
 
 ### Q1: Domain Name and SSL ✅ RESOLVED
 

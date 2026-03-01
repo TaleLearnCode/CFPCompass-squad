@@ -242,3 +242,63 @@
 - **Secondary Tags (10 groups):** Programming Languages, Frameworks/Ecosystems, Cloud Providers, AI/ML Focus, Architecture Styles, Infrastructure Practices, Security Topics, Data Topics, Developer Experience, Community/Career
 
 
+### 2026-03-01 — Requirements v3.3: Observability & Developer Experience NFRs (Aspire 13.1)
+
+**Task:** Chad Green directed adoption of .NET Aspire 13.1. Analyzed whether user-facing or non-functional requirements need updating. Added two NFR sections to requirements.md.
+
+**Key Decisions:**
+
+1. **Aspire scope:** Aspire is primarily infrastructure/developer tooling — NOT user-facing. Technical details (AppHost project, AddServiceDefaults(), Aspire diagnostics) belong in architecture.md, not requirements.md.
+
+2. **What to add to requirements.md:**
+   - NFR-1: Observability (health endpoints, distributed tracing, structured logging, correlation across service boundaries)
+   - NFR-2: Developer Experience (single-command local stack start, local telemetry dashboard)
+   - Both are observable, testable requirements grounded in user/operator needs
+
+**Changes Applied:**
+
+**1. New "Non-Functional Requirements" Section (v3.3):**
+- Placed after Epic 6 (Administration), before Resolved Decisions
+- Two NFRs covering observability and developer experience
+
+**2. NFR-1: Observability (Distributed Tracing & Health Checks):**
+- Requirement: `/health` endpoint on every service component
+- Health checks cover all external dependencies (SQL, Redis, Service Bus, ACS)
+- Traces correlated by trace ID across service boundaries
+- Structured logs include trace ID for end-to-end correlation
+- Traces exported to Azure Monitor / Application Insights
+- ACs demonstrate: end-to-end tracing from API → Service Bus → background worker, operator debugging capability, health endpoint behavior
+
+**3. NFR-2: Developer Experience (Local Stack):**
+- Requirement: Full local development stack startable with a single command
+- All services (API, Web, SQL, Redis, Service Bus emulator) initialized automatically
+- Local telemetry dashboard available during development (port-accessible)
+- ACs demonstrate: 30-second startup, dashboard accessibility, real-time trace visibility for debugging
+
+**4. Metadata Updates:**
+- Version: v3.1 → v3.3
+- Last Updated: 2026-02-28 → 2026-03-01
+- Added HTML comment markers for traceability: `<!-- Updated v3.3: Added NFR section... -->`
+
+**Patterns Applied:**
+- NFRs describe observable behavior, not implementation (Aspire tooling details deferred to architecture)
+- Health endpoint and distributed trace requirements grounded in operator/debugger needs
+- Local stack startup and dashboard requirements grounded in developer productivity
+- All ACs use Given/When/Then for testability
+- Separation of concerns: requirements cover "what must be observable", architecture covers "how to build with Aspire"
+
+**Rationale:**
+- Health endpoints are operator-facing (monitoring, alerting) — belongs in NFRs
+- Distributed tracing and trace correlation enable production debugging — belongs in NFRs
+- Local development stack experience affects team velocity — belongs in NFRs
+- Aspire implementation details (AppHost, orchestration, SDK extensions) stay in architecture.md
+- This aligns with Requirements Analyst charter: define observable behavior, not technical stack
+
+**Impact:**
+- Ripley (Backend): Implement `/health` endpoints on all service components; ensure trace ID propagation in logging
+- Lambert (Frontend): Ensure Blazor Server logs include trace IDs
+- Parker (DevOps): Container Apps health probes configured to use `/health` endpoints; Application Insights configured as traces sink
+- Dallas (Lead): Aspire AppHost project architecture and service configuration; ensures all services call AddServiceDefaults() and are discoverable via Aspire
+- Kane (Tester): Test health endpoints and external dependency coverage; test trace correlation end-to-end
+
+

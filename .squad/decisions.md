@@ -560,3 +560,92 @@ CFP Compass submission form security will use **Cloudflare Turnstile (primary) +
 | Q4: Email sender | `noreply@cfpcompass.com` | ACS domain verification, email templates |
 
 ---
+
+# ADR-013: .NET Aspire 13.1 for Orchestration and Observability
+
+**Status:** Accepted  
+**Date:** 2026-03-01  
+**Author:** Dallas (Lead & Architect)  
+**Requested by:** Chad Green  
+
+## Decision
+
+Adopt .NET Aspire 13.1 for local development orchestration (AppHost), shared observability baseline (ServiceDefaults), and Azure integration packages.
+
+## Summary
+
+- Solution expanded from 7 to 9 projects: added `CfpCompass.AppHost` and `CfpCompass.ServiceDefaults`
+- AppHost orchestrates all services/containers for local dev — single `dotnet run` entry point
+- ServiceDefaults provides consistent OpenTelemetry (traces, metrics, logs), health checks (`/health`, `/alive`), and resilience (Polly) across all service projects
+- Aspire Dashboard at `https://localhost:18888` for distributed tracing and log correlation during development
+- Aspire integration packages (`Aspire.Azure.*`) replace manual SDK configuration for Redis, Service Bus, and SQL
+- Production: AppHost is NOT deployed; OpenTelemetry exports to Azure Monitor / Application Insights (config-only switch)
+- Production hosting remains Azure Container Apps + Terraform (unchanged)
+- Aspire 13.1 targets .NET 10 — version-aligned with project stack
+- Developers need: `dotnet workload install aspire`
+
+## Impact
+
+| Team | Impact |
+|------|--------|
+| **Ripley (Backend)** | All service projects must call `builder.AddServiceDefaults()` at startup; Aspire integration packages replace manual connection string wiring for Redis, Service Bus, SQL |
+| **Lambert (Frontend)** | Web project calls `AddServiceDefaults()` — gains health checks and OpenTelemetry automatically |
+| **Parker (DevOps)** | AppHost excluded from CI/CD and production Docker builds; `dotnet workload install aspire` added to dev setup docs |
+| **Kane (Tester)** | Integration tests can leverage Aspire's test host for multi-service scenarios |
+| **All** | Enforce `AddServiceDefaults()` in all service projects via PR review |
+
+## Architecture Changes
+
+- `architecture.md` v3.0: New sections 10 (Observability) and 11 (Local Development); ADR-013 in Section 14; sections renumbered
+
+---
+
+# Non-Functional Requirements — Observability & Developer Experience
+
+**Status:** Integrated into requirements.md v3.3  
+**Date:** 2026-03-01  
+**Author:** Brett (Requirements Analyst)  
+**Cross-reference:** ADR-013, architecture.md v3.0 §10–11
+
+## NFR-1: Observability
+
+**Requirement:** CFP Compass must emit structured logs, distributed traces, and custom metrics to a centralized observability platform.
+
+**Details:**
+- All service projects produce structured JSON logs (Serilog)
+- Distributed tracing via OpenTelemetry; correlation IDs propagate across service boundaries
+- Custom metrics for CFP submission latency, API request rates, authentication failures
+- Azure Monitor / Application Insights receives traces, metrics, and logs from production
+- Health check endpoints (`GET /health` detail, `GET /alive` liveness) on all services
+- Aspire Dashboard (`https://localhost:18888`) displays traces/logs during development
+
+**Rationale:** Multi-service architecture (AppHost + ServiceDefaults + 8 service projects) requires end-to-end observability to diagnose issues. Development team needs local tracing; operations team needs production telemetry.
+
+**Impact:**
+- **Ripley:** Health checks + OpenTelemetry automatic via ServiceDefaults; custom metrics added to critical paths
+- **Lambert:** Health checks + OTel automatic via ServiceDefaults
+- **Parker:** Azure Monitor pricing; no setup cost for OTel export (built into Azure Container Apps)
+- **Kane:** Test health check endpoints; validate trace propagation in integration tests
+
+---
+
+## NFR-2: Developer Experience
+
+**Requirement:** CFP Compass development environment must launch all services with a single command.
+
+**Details:**
+- `dotnet run` in AppHost directory orchestrates all services/containers
+- Aspire Dashboard automatically opens at `https://localhost:18888` showing service status, logs, traces
+- No manual port mapping or environment variable configuration for local dev
+- `dotnet workload install aspire` one-time setup documented in README
+- Development mode config (no TLS, relaxed CORS) auto-applied
+
+**Rationale:** Multi-service local dev (7–9 projects) requires coordination. Aspire AppHost eliminates boilerplate; single entry point is a huge UX improvement for onboarding and daily development. Reduces cognitive load and context switching.
+
+**Impact:**
+- **All:** Faster onboarding; reduced setup friction
+- **Parker:** Dev setup docs simplified; workload installation is a single line
+- **Kane:** Simpler test environment orchestration via Aspire test host
+- **Dallas/Ripley/Lambert:** Faster iteration cycle (start once, all services ready)
+
+---

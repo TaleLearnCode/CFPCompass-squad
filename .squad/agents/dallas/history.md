@@ -99,3 +99,30 @@ Chad Green confirmed Cloudflare Turnstile + Honeypot as the bot protection strat
 
 `architecture.md` updated: Q2 section replaced with full resolution detail; ADR-012 in Section 12; `Turnstile-SiteKey` and `Turnstile-SecretKey` added to Key Vault secrets table (Section 9). No open architectural questions remain.
 
+### .NET Aspire 13.1 Adoption (2026-03-01)
+
+**ADR-013 created:** .NET Aspire 13.1 adopted for local development orchestration and observability baseline. Chad Green directive.
+
+**Solution structure:** Expanded from 7 to 9 projects with the addition of:
+- `CfpCompass.AppHost` — Aspire orchestrator declaring full service topology (Api, Web, Workers, Functions, SQL, Redis, Service Bus). Dev/test only; NOT deployed to production.
+- `CfpCompass.ServiceDefaults` — Shared `AddServiceDefaults()` extension consumed by all service projects. Configures OpenTelemetry (traces, metrics, logs), health check endpoints (`/health`, `/alive`), resilience defaults (Polly), and service discovery.
+
+**Key patterns:**
+- All service projects (Api, Web, Workers, Functions) call `builder.AddServiceDefaults()` at startup — enforced via PR review
+- AppHost provides single-command local startup: `dotnet run --project CfpCompass.AppHost`
+- Aspire Dashboard at `https://localhost:18888` for distributed tracing and log correlation during development
+- Aspire integration packages (`Aspire.Azure.*`) replace manual SDK configuration for Redis, Service Bus, and SQL — handle connection string injection, health checks, and telemetry automatically
+- Production: OpenTelemetry exports to Azure Monitor / Application Insights (config-only switch from Aspire Dashboard)
+- AppHost excluded from CI/CD deployment pipeline and production Docker builds — dev tooling only
+- Production hosting remains Azure Container Apps + Terraform (unchanged)
+
+**Architecture.md changes:**
+- Version bumped to v3.0
+- Section 2 (Solution Structure): 9-project layout with AppHost and ServiceDefaults
+- Section 10 (Observability): New — OpenTelemetry, Aspire Dashboard, Azure Monitor, health checks, distributed tracing
+- Section 11 (Local Development): New — single-command startup, service table, prerequisites
+- Sections 10-13 renumbered to 12-15
+- ADR-013 added to Section 14
+- Aspire integration packages noted in data/caching section (Section 3)
+- Container Registry note: AppHost/ServiceDefaults excluded from Docker images
+

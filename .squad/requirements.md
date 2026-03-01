@@ -1,7 +1,7 @@
 # CFP Compass — Requirements Breakdown
 
-**Last Updated:** 2026-02-28  
-**Version:** v3.1  
+**Last Updated:** 2026-03-01  
+**Version:** v3.3  
 **Owner:** Brett (Requirements Analyst)  
 **Project:** CFP Compass — .NET 10 / Azure web application aggregating open Calls for Papers  
 **Features:** 18
@@ -856,6 +856,85 @@
 - **Then** the user's status changes to "Disabled"
 - **And** the user cannot log in (receives "Account disabled" message)
 - **And** I can re-enable the account at any time
+
+---
+
+## Non-Functional Requirements
+
+<!-- Updated v3.3: Added NFR section covering Observability and Developer Experience, driven by .NET Aspire 13.1 adoption -->
+
+### NFR-1: Observability (Distributed Tracing & Health Checks)
+
+**Description:** All service components expose structured observability signals (health checks and distributed traces) to enable production debugging, monitoring, and alerting.
+
+**Requirements:**
+
+1. **Health Endpoints**
+   - Every service component (API, background workers, CLI tools) exposes a `/health` endpoint returning HTTP 200 OK + JSON status
+   - Health checks cover all external dependencies: Azure SQL Database, Azure Cache for Redis, Azure Service Bus, Azure Communication Services
+   - Health endpoint is included in Container Apps liveness and readiness probes
+   - Health status is not authenticated (operators and systems need access without credentials)
+
+2. **Distributed Tracing**
+   - All service-to-service calls are traced with a unique trace ID
+   - Trace IDs are propagated across service boundaries (SQL, Service Bus, cache, external APIs)
+   - Structured logs include the trace ID, allowing correlation of all related log entries
+   - Traces are exported to Azure Monitor / Application Insights for production debugging
+
+3. **Structured Logging**
+   - All logs include: timestamp, log level, service name, trace ID, message, and contextual fields (user ID, CFP ID, request ID)
+   - Log format is JSON or structured text (not free-form) to enable querying and alerting
+   - Logs are sent to the same Application Insights instance as traces
+
+4. **Acceptance Criteria**
+
+   - **Given** a speaker submits a CFP via the API and the submission triggers a background job
+   - **When** the job processes the CFP
+   - **Then** the same trace ID appears in API logs, Service Bus logs, and background worker logs
+   - **And** an operator can search Azure Monitor by trace ID to see the full request flow end-to-end
+
+   - **Given** an admin opens the dashboard during development
+   - **When** the admin queries logs or traces
+   - **Then** they can filter by trace ID, service name, or time window to debug issues
+
+   - **Given** the SQL database is unreachable
+   - **When** an operator checks `/health` on the API
+   - **Then** they receive HTTP 503 Service Unavailable with a JSON status object indicating "SQL: Unhealthy"
+
+---
+
+### NFR-2: Developer Experience (Local Development Stack)
+
+**Description:** Developers must be able to start the full local development environment with a single command, enabling rapid iteration and debugging.
+
+**Requirements:**
+
+1. **Single-Command Local Stack Start**
+   - Running a single CLI command (e.g., `dotnet run` in AppHost or `docker compose up`) starts all services:
+     - CFP Compass API (ASP.NET Core)
+     - Web UI (Blazor Server)
+     - Azure SQL Server container
+     - Azure Cache for Redis container
+     - Azure Service Bus emulator
+   - All services are accessible at `localhost` with standard ports (e.g., API at `:5000`, UI at `:5001`)
+   - No manual setup steps (environment variables, schema migrations, seed data) required — automation handles all initialization
+
+2. **Local Telemetry Dashboard**
+   - A local development dashboard (e.g., Application Insights emulator, Aspire dashboard, or standalone trace viewer) is available at a standard port (e.g., `:4317`)
+   - Dashboard displays real-time logs, traces, and metrics from all services
+   - Developer can search logs and traces by trace ID, service name, or time range to debug issues locally
+
+3. **Acceptance Criteria**
+
+   - **Given** a developer clones the repo
+   - **When** they run the start command
+   - **Then** after ~30 seconds, all 5 components are running and the UI is accessible at `http://localhost:5001`
+   - **And** the telemetry dashboard is accessible at the expected port
+
+   - **Given** the developer is debugging a feature locally
+   - **When** they perform an action in the web UI (e.g., submit a CFP)
+   - **Then** the action's trace appears in the local dashboard within 1 second
+   - **And** they can click on the trace to see detailed logs and span timings across all services
 
 ---
 
