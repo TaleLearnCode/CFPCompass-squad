@@ -17,5 +17,6 @@
 | Parker | DevOps / Cloud | ⚙️ | Azure, Terraform, GitHub Actions, CI/CD |
 | Kane | Tester | 🧪 | Unit/integration tests, edge cases, API validation |
 | Brett | Requirements Analyst | 🔍 | User needs, feature specs, acceptance criteria |
+| Ash | Technical Writer | 📝 | API docs, developer guides, changelogs, spec documentation |
 | Scribe | Session Logger | 📋 | Memory, decisions, session logs (silent) |
 | Ralph | Work Monitor | 🔄 | Work queue, backlog, keep-alive |

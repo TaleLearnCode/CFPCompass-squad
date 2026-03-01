@@ -10,6 +10,7 @@
 | Azure infrastructure, Terraform, GitHub Actions, CI/CD, workers | Parker |
 | Testing, quality, edge cases, test coverage, mocks | Kane |
 | Requirements, user stories, acceptance criteria, feature decomposition | Brett |
+| Documentation, API docs, developer guides, changelogs, release notes | Ash |
 | "Team" or multi-domain task | Dallas + relevant specialists in parallel |
 
 ## Domain Keywords
@@ -21,4 +22,5 @@
 | Terraform, Azure, deploy, Container Apps, CI/CD, pipeline, workflow, Azure Functions, worker, email | Parker |
 | test, spec, coverage, edge case, validation, mock, fixture, xUnit, integration | Kane |
 | requirement, user story, acceptance criteria, feature, scope, PRD, persona, use case | Brett |
+| documentation, docs, changelog, release notes, API guide, developer guide, readme, spec docs | Ash |
 | architecture, design, review, ADR, decision, refactor, structure, pattern | Dallas |

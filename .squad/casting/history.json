@@ -10,7 +10,8 @@
         { "name": "Lambert", "role": "Frontend Dev" },
         { "name": "Parker", "role": "DevOps / Cloud" },
         { "name": "Kane", "role": "Tester" },
-        { "name": "Brett", "role": "Requirements Analyst" }
+        { "name": "Brett", "role": "Requirements Analyst" },
+        { "name": "Ash", "role": "Technical Writer" }
       ]
     }
   ]
