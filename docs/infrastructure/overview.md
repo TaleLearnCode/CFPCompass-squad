@@ -108,8 +108,8 @@ Internet
                       Azure services)  (access key auth)
                             │
                       Azure Key Vault   Azure Blob Storage     Azure Comm. Services
-                      (managed identity) (SAS tokens)         (connection string
-                                                               from Key Vault)
+                      (managed identity) (managed identity:    (connection string
+                                          Blob Data roles)      from Key Vault)
 
     Azure App Configuration (labels: dev/staging/prod)
         ├── Non-sensitive config values (log levels, URLs, schedules)
@@ -140,9 +140,9 @@ CFP Compass uses **Azure Managed Identity** as the primary credential mechanism 
 
 | Service | Identity Type | Access Target |
 |---------|--------------|--------------|
-| Container App (Web) | System-assigned managed identity | Key Vault (secrets read) |
-| Container App (API) | System-assigned managed identity | Key Vault (secrets read), Service Bus (send), ACR (pull) |
-| Azure Functions | System-assigned managed identity | Key Vault (secrets read), Service Bus (listen), Azure SQL (write) |
+| Container App (Web) | System-assigned managed identity | Key Vault (secrets read), Azure Blob Storage (`Storage Blob Data Reader`) |
+| Container App (API) | System-assigned managed identity | Key Vault (secrets read), Service Bus (send), ACR (pull), Azure Blob Storage (`Storage Blob Data Contributor`) |
+| Azure Functions | System-assigned managed identity | Key Vault (secrets read), Service Bus (listen), Azure SQL (write), Azure Blob Storage (`Storage Blob Data Contributor`) |
 | Container Apps Jobs | System-assigned managed identity | Key Vault (secrets read), Azure SQL (read/write) |
 
 **Key Vault secret inventory:**
@@ -153,7 +153,6 @@ CFP Compass uses **Azure Managed Identity** as the primary credential mechanism 
 | `Redis-ConnectionString` | Cache connection |
 | `ServiceBus-ConnectionString` | Service Bus connection |
 | `ACS-ConnectionString` | Email service |
-| `Storage-ConnectionString` | Blob storage |
 | `Fido2-Origins` | WebAuthn allowed origins |
 | `AdminEmails` | Comma-separated admin email list |
 | `OAuth-Google-ClientId` / `ClientSecret` | Google OAuth |
@@ -162,6 +161,8 @@ CFP Compass uses **Azure Managed Identity** as the primary credential mechanism 
 | `Jwt-SigningKey` | JWT signing for email tokens |
 | `Turnstile-SiteKey` | Cloudflare Turnstile site key |
 | `Turnstile-SecretKey` | Cloudflare Turnstile secret key |
+
+> **Blob Storage:** `Storage-ConnectionString` is **not** stored in Key Vault. Blob Storage access is granted via Azure RBAC (Managed Identity) — the storage account name is a non-secret value stored in **Azure App Configuration** as `Storage:AccountName` with per-environment labels. `BlobServiceClient` is initialised with `DefaultAzureCredential` and the account URL (`https://{accountName}.blob.core.windows.net`). See Issue #1 and `.squad/agents/parker/blob-storage-mi-plan.md`.
 
 **Application-level authentication** is handled by ASP.NET Core Identity (passkeys via Fido2NetLib, OAuth social login). See [ADR-003](../registers/decisions/ADR-003-aspnet-core-identity.md) for rationale.
 

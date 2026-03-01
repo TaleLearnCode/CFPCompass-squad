@@ -112,12 +112,14 @@ infra/
 │   ├── acs/                   # Azure Communication Services + Email domain verification
 │   ├── frontdoor/             # Front Door (Standard) + Origins + Routes + WAF policy
 │   ├── identity/              # User-assigned managed identities for Container Apps + Functions
+│   ├── blob-storage-rbac/     # Storage Blob Data Contributor RBAC for Container App MIs (Issue #1)
 │   └── monitoring/            # Log Analytics Workspace + Application Insights
 │
 └── environments/
     ├── dev/
-    │   ├── main.tf            # Dev module instantiation with dev-specific overrides
-    │   └── terraform.tfvars   # Dev variable values (SKU overrides, region, tags)
+    │   ├── main.tf              # Dev module instantiation with dev-specific overrides
+    │   ├── terraform.tfvars     # Dev variable values (SKU overrides, region, tags)
+    │   └── blob-storage-rbac.tf # Blob Storage RBAC caller for dev environment (Issue #1)
     ├── staging/
     │   ├── main.tf
     │   └── terraform.tfvars
@@ -249,10 +251,12 @@ Azure Front Door → APIM
 
 | Resource | Identity | Grants |
 |----------|---------|--------|
-| Container App (Web) | System-assigned | Key Vault: `secrets/get` |
-| Container App (API) | System-assigned | Key Vault: `secrets/get`; Service Bus: `Azure Service Bus Data Sender`; ACR: `AcrPull` |
-| Container Apps Jobs | System-assigned | Key Vault: `secrets/get`; Azure SQL: `db_datareader`, `db_datawriter` |
+| Container App (Web) | System-assigned | Key Vault: `secrets/get`; Storage: `Storage Blob Data Contributor` |
+| Container App (API) | System-assigned | Key Vault: `secrets/get`; Service Bus: `Azure Service Bus Data Sender`; ACR: `AcrPull`; Storage: `Storage Blob Data Contributor` |
+| Container Apps Jobs | System-assigned | Key Vault: `secrets/get`; Azure SQL: `db_datareader`, `db_datawriter`; Storage: `Storage Blob Data Contributor` |
 | Azure Functions | System-assigned | Key Vault: `secrets/get`; Service Bus: `Azure Service Bus Data Receiver`; Azure SQL: `db_datawriter` |
+
+> **Blob Storage access (Issue #1, 2026-03-01):** SAS tokens have been replaced with `Storage Blob Data Contributor` RBAC assignments on the Container App managed identities. All blob operations use `DefaultAzureCredential` via the `Aspire.Azure.Storage.Blobs` integration package. SAS token generation and the `Storage-ConnectionString` Key Vault secret should be removed once all environments confirm MI-based access. RBAC assignments are managed by the `blob-storage-rbac` Terraform module. See [GitHub Issue #1](https://github.com/TaleLearnCode/CFPCompass-squad/issues/1).
 
 **Key Vault references in Container Apps:** Environment variables in Container Apps are configured as Key Vault references (`@Microsoft.KeyVault(SecretUri=...)`) rather than plain values. At runtime, the Container Apps runtime resolves secrets directly from Key Vault using the app's managed identity.
 
