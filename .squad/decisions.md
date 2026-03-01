@@ -494,6 +494,20 @@ CFP Compass submission form security will use **Cloudflare Turnstile (primary) +
 
 ## ADR-006 (Revised): APIM Developer Tier
 
+---
+
+## Git Workflow — User Directive
+
+**Date:** 2026-03-01T02:30:24Z  
+**Author:** Chad Green (captured via Copilot)  
+**Status:** Active — enforced as team policy
+
+**Directive:** Never commit directly to main. All squad changes must go through a branch and pull request.
+
+**Rationale:** Ensures code review, team visibility, and clean commit history. Prevents accidental breaks to main branch.
+
+**Implementation:** All Scribe commits, Lead triages, and member work routes through feature/fix branches with pull requests.
+
 **Decision:** Azure API Management Developer tier for MVP. Upgrade path: Developer → Standard V2.
 
 **Rationale:** Developer tier provides dedicated capacity (no cold start), VNet integration (internal mode), and built-in developer portal. Consumption tier's cold start (~1-2s) and lack of VNet were identified risks. Fixed cost (~$50/month) is justified by the capability gains.
