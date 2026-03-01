@@ -1,9 +1,9 @@
 # CFP Compass — System Architecture
 
-**Version:** v3.1  
+**Version:** v4.0  
 **Author:** Dallas (Lead & Architect)  
-**Date:** 2026-02-28 (v1.0), updated 2026-03-01 (v2.0), updated 2026-03-01 (v3.0), updated 2026-03-01 (v3.1)  
-**Status:** Active — .NET Aspire 13.1 adopted for orchestration and observability
+**Date:** 2026-02-28 (v1.0), updated 2026-03-01 (v2.0), updated 2026-03-01 (v3.0), updated 2026-03-01 (v3.1), updated 2026-03-01 (v4.0)  
+**Status:** Active — Contract-first API and event design (ADR-014) adopted
 
 ---
 
@@ -362,6 +362,10 @@ Domain (innermost) → Application → Infrastructure / Api / Web / Workers (out
 ---
 
 ## 4. API Design
+
+### Spec-First Requirement
+
+> **All REST endpoints in `CfpCompass.Api` must have an approved OpenAPI 3.1 specification before implementation begins.** Spec files live in `docs/api/openapi/` (canonical: `cfp-compass-api-v1.yaml`). APIM imports the spec directly — the published OpenAPI spec IS the APIM policy source of truth. See Section 11 (API & Event Contract Design) and ADR-014.
 
 ### REST API Structure
 
@@ -1045,7 +1049,90 @@ Api (HTTP request) → Service Bus (publish) → Functions (subscribe + process)
 
 ---
 
-## 11. Local Development
+## 11. API & Event Contract Design
+
+> **APIs and events are design-driven.** No REST endpoint or Service Bus topic may be implemented without an approved specification.
+
+### OpenAPI 3.1 — REST API Contracts
+
+All REST endpoints in `CfpCompass.Api` must have an **approved OpenAPI 3.1 specification** before implementation begins.
+
+**Spec file location:** `docs/api/openapi/` (e.g., `cfp-compass-api-v1.yaml`)
+
+**Tooling:**
+
+| Tool | Purpose |
+|------|---------|
+| **Scalar** (or Swashbuckle/NSwag) | Serves the spec from the running API for developer convenience — but the canonical spec is the hand-authored YAML in `docs/api/openapi/`, not auto-generated |
+| **Spectral** | Lints the OpenAPI spec against the `spectral:oas` ruleset |
+| **oasdiff** | Detects breaking changes between spec versions |
+
+**APIM integration:** APIM imports the spec directly. The published OpenAPI spec IS the APIM policy source of truth.
+
+**Approval gate:** The OpenAPI spec PR must be reviewed and merged **before** the implementation PR is opened. The spec is the source of truth; implementation must conform to it (not the other way around).
+
+---
+
+### AsyncAPI 3.0.0 — Service Bus Event Contracts
+
+All Azure Service Bus topics and their message schemas must have an **approved AsyncAPI 3.0.0 specification** before any producer or consumer implementation begins.
+
+**Spec file location:** `docs/api/asyncapi/` (e.g., `cfp-submissions.asyncapi.yaml`)
+
+Each spec covers: channel (topic name), message schema (JSON Schema), bindings (Azure Service Bus), and operation (publish/subscribe).
+
+**Tooling:**
+
+| Tool | Purpose |
+|------|---------|
+| **AsyncAPI CLI** (`asyncapi validate`) | Validates spec files in CI |
+| **AsyncAPI Studio** (or VS Code extension) | Authoring and live preview |
+
+The JSON Schema sections of each AsyncAPI spec are the **canonical message contracts** — producers and consumers must conform.
+
+**Approval gate:** The AsyncAPI spec PR must be reviewed and merged **before** producer or consumer implementation PRs are opened.
+
+**Known topics requiring AsyncAPI specs** (from the event-driven write architecture — ADR-007):
+
+| Topic | Description |
+|-------|-------------|
+| `cfp-submission-created` | New CFP submission submitted via API |
+| `cfp-submission-updated` | Organizer edited a pending submission |
+| `cfp-submission-approved` | Admin approved/published a submission |
+| `cfp-submission-rejected` | Admin rejected a submission |
+| `cfp-submission-reconsideration` | Organizer requested reconsideration after rejection |
+| `organizer-claim-requested` | Someone requested to claim an unverified listing |
+
+---
+
+### Spec Repository Layout
+
+```
+docs/
+  api/
+    openapi/
+      cfp-compass-api-v1.yaml   # REST API spec (OpenAPI 3.1)
+      README.md                  # Approval workflow notes
+    asyncapi/
+      cfp-submissions.asyncapi.yaml   # Submission lifecycle events
+      organizer-claims.asyncapi.yaml  # Organizer claim events
+      README.md                        # Approval workflow notes
+```
+
+---
+
+### CI Validation
+
+| Trigger | Workflow | Validation |
+|---------|----------|-----------|
+| PR touching `docs/api/openapi/` | GitHub Actions | Spectral lint (`spectral:oas` ruleset) |
+| PR touching `docs/api/asyncapi/` | GitHub Actions | AsyncAPI CLI (`asyncapi validate`) |
+
+Implementation PRs that touch API routes or Service Bus producers/consumers must reference the approved spec PR.
+
+---
+
+## 12. Local Development
 
 ### Single-Command Startup via Aspire AppHost
 
@@ -1072,7 +1159,7 @@ Api (HTTP request) → Service Bus (publish) → Functions (subscribe + process)
 
 ---
 
-## 12. Security Considerations
+## 13. Security Considerations
 
 ### Threat Model Highlights
 
@@ -1146,7 +1233,7 @@ App-level rate limits (defense in depth):
 
 ---
 
-## 13. Testing Strategy
+## 14. Testing Strategy
 
 ### Unit Tests
 
@@ -1208,7 +1295,7 @@ public class CfpApiTests : IClassFixture<CfpCompassWebApplicationFactory>
 
 ---
 
-## 14. Key Architecture Decisions (ADR-Style)
+## 15. Key Architecture Decisions (ADR-Style)
 
 ### ADR-001: Azure SQL Database over Cosmos DB
 
@@ -1473,7 +1560,45 @@ public class CfpApiTests : IClassFixture<CfpCompassWebApplicationFactory>
 
 ---
 
-## 15. Open Questions — Status
+### ADR-014: Contract-First API and Event Design
+
+**Status:** Accepted
+
+**Date:** 2026-03-01
+
+**Context:** CFP Compass exposes a public REST API (consumed by the Blazor web app and potentially third-party integrators) and an event-driven backend via Azure Service Bus. Without a contract-first discipline, APIs and events evolve organically, leading to undocumented breaking changes, mismatched producer/consumer expectations, and difficulty onboarding new consumers.
+
+**Decision:** All REST API endpoints must have an approved OpenAPI 3.1 specification, and all Azure Service Bus topics must have an approved AsyncAPI 3.0.0 specification, before any implementation begins.
+
+**Rationale:**
+- OpenAPI 3.1 is the industry standard for REST API contracts; APIM can import it directly, closing the loop between contract and gateway enforcement
+- AsyncAPI 3.0.0 is the leading standard for event-driven API contracts; it mirrors OpenAPI's design philosophy for async systems
+- Contract-first prevents "implementation-first" drift where the spec is generated from code and never reviewed as a design artifact
+- Approved specs serve as team alignment artifacts — all parties (frontend, backend, testers, API consumers) agree on the contract before anyone writes code
+- Breaking change detection (oasdiff) is only meaningful when the spec is the source of truth
+
+**Implementation notes:**
+- Spec files live in `docs/api/openapi/` (OpenAPI) and `docs/api/asyncapi/` (AsyncAPI)
+- Approval gate enforced via PR process: spec PR merged → implementation PR opened
+- CI validates both spec types on every PR touching `docs/api/`
+- APIM policy configuration references the OpenAPI spec directly
+- The canonical message schema for each Service Bus topic is defined in the AsyncAPI spec's `components/schemas` section
+
+**Alternatives considered:**
+- Code-first with auto-generated specs: Rejected — auto-generated specs are documentation, not contracts; they cannot be reviewed as design artifacts
+- OpenAPI only (no AsyncAPI): Rejected — Service Bus events are as much a public contract as REST endpoints; undocumented event schemas cause producer/consumer mismatches
+
+**Consequences:**
+- ✅ Every new API endpoint requires a spec PR before implementation — enforces design review at the contract level
+- ✅ Every new Service Bus topic requires an AsyncAPI spec PR before implementation
+- ✅ APIM imports the OpenAPI spec directly — contract and gateway enforcement stay in sync automatically
+- ✅ Breaking change detection (oasdiff) is meaningful because the spec is the source of truth
+- ⚠️ New tooling required: Spectral (OpenAPI linting), AsyncAPI CLI (AsyncAPI validation), oasdiff (breaking change detection)
+- ⚠️ Developer workflow change: design review happens at the spec level, not the code review level; spec PR must precede implementation PR
+
+---
+
+## 16. Open Questions — Status
 
 ### Q1: Domain Name and SSL ✅ RESOLVED
 

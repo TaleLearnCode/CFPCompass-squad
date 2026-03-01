@@ -140,3 +140,17 @@ Chad Green confirmed Cloudflare Turnstile + Honeypot as the bot protection strat
 - **Aspire ServiceDefaults note:** `AddServiceDefaults()` auto-registers `/health` for ASP.NET Core projects (Api, Web, Workers); Functions uses manual `HealthCheckFunction` instead.
 - **No new ADR** — this is an elaboration of the existing health check commitment in ADR-013 and NFR-1.
 
+### Contract-First API & Event Design (2026-03-01)
+
+**Chad Green directive:** APIs and events are design-driven. No REST endpoint or Service Bus topic may be implemented without an approved specification.
+
+**ADR-014 created** — Contract-First API and Event Design:
+
+- **OpenAPI 3.1** required for all REST endpoints in `CfpCompass.Api` before implementation. Spec files: `docs/api/openapi/` (canonical: `cfp-compass-api-v1.yaml`). APIM imports the spec directly.
+- **AsyncAPI 3.0.0** required for all Azure Service Bus topics before producer or consumer implementation. Spec files: `docs/api/asyncapi/`.
+- **Approval gate:** Spec PR merged → implementation PR opened. No exceptions.
+- **Known topics requiring AsyncAPI specs:** `cfp-submission-created`, `cfp-submission-updated`, `cfp-submission-approved`, `cfp-submission-rejected`, `cfp-submission-reconsideration`, `organizer-claim-requested`
+- **CI validation:** Spectral (`spectral:oas`) for OpenAPI specs; AsyncAPI CLI (`asyncapi validate`) for AsyncAPI specs — both run on every PR touching `docs/api/`.
+- **Tooling:** Spectral (OpenAPI linting), AsyncAPI CLI (validation), oasdiff (breaking-change detection), Scalar/Swashbuckle (developer serving — not canonical), AsyncAPI Studio (authoring).
+- **Architecture.md:** v4.0 — new Section 11 (API & Event Contract Design); ADR-014 in Section 15; spec-first note added to Section 4 (API Design); sections 11–15 renumbered to 12–16.
+

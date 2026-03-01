@@ -302,6 +302,48 @@
 - Kane (Tester): Test health endpoints and external dependency coverage; test trace correlation end-to-end
 
 
+### 2026-03-01 — Requirements v3.5: Contract-First API and Event Design NFR
+
+**Task:** Chad Green directed: "APIs and events are design-driven." Added NFR-3 to establish contract-first process for both REST APIs (OpenAPI 3.1) and Service Bus events (AsyncAPI 3.0.0) before implementation begins.
+
+**Key Changes Applied:**
+
+**1. New NFR-3: Contract-First API and Event Design:**
+   - **REST API Contracts (OpenAPI 3.1):** Every REST endpoint must have an approved OpenAPI 3.1 spec before implementation begins. Spec is reviewed via PR, merged, and serves as the contract for implementation.
+   - **Service Bus Event Contracts (AsyncAPI 3.0.0):** Every Service Bus topic and message schema must have an approved AsyncAPI 3.0.0 spec before producer/consumer implementation. Known topics: CFP Submission Lifecycle (created, updated, approved, rejected, reconsideration requested) and Organizer Claim Events (claim requested, claim verified, claim completed).
+   - **Approval Gate:** A specification PR must be reviewed, approved, and merged into main branch before implementation PR is opened. Implementation may not begin until spec PR is merged.
+   - **Conformance:** Implemented API/event must match approved spec exactly. Deviations require spec revision and re-approval (not implementation "fixes").
+   - **Breaking Changes:** Any change breaking consumers requires new version (e.g., `/api/v1/` → `/api/v2/`), new spec PR with review/approval, and deprecation period for old version.
+   - **Acceptance Criteria:** 6 testable scenarios covering spec proposal → review → approval → implementation conformance → breaking change handling.
+
+**2. Metadata Updates:**
+   - Version: v3.4 → v3.5
+   - Last Updated: 2026-03-01 (unchanged)
+   - Added v3.5 row to Revision History table with full change description
+
+**Patterns Applied:**
+   - Surgical edit: Added NFR-3 between NFR-2 and "Resolved Decisions" section
+   - Added HTML comment marker for traceability: `<!-- Updated v3.5: Added NFR-3... -->`
+   - All requirements stated in observable, testable language (no tool names)
+   - Acceptance criteria use Given/When/Then format
+   - Specification formats (OpenAPI 3.1, AsyncAPI 3.0.0) are explicit and versioned
+
+**Rationale:**
+   - Contract-first prevents consumer-breaking changes via ad-hoc implementation decisions
+   - Spec-before-code enables clear team alignment and reduces implementation rework
+   - Specification pull requests provide review gate and audit trail for contracts
+   - Breaking change policy ensures backwards compatibility or explicit versioning
+   - Identified Service Bus topics ground the requirement in team's known architecture
+
+**Impact:**
+   - **Dallas (Lead):** All new API and event work now requires spec PR first; no implementation without approved spec
+   - **Ripley (Backend):** API endpoint implementation must conform to approved OpenAPI spec; Service Bus producer implementation must conform to approved AsyncAPI spec
+   - **Lambert (Frontend):** API consumer code generation and integration must use approved OpenAPI specs
+   - **Parker (DevOps):** API contract documentation and versioning tracking
+   - **Chad (Product):** Contract-first process now part of team workflow — protects against mid-project API breaking changes
+
+
+
 ### 2026-03-01 — Requirements v3.4: Expanded NFR-1 Health Check Requirements
 
 **Task:** Chad Green directed: "Health check endpoints must verify both service availability AND connectivity to all required dependencies." Expanded NFR-1 with per-service dependency coverage, status semantics, HTTP codes, and Container Apps integration.

@@ -649,3 +649,96 @@ Adopt .NET Aspire 13.1 for local development orchestration (AppHost), shared obs
 - **Dallas/Ripley/Lambert:** Faster iteration cycle (start once, all services ready)
 
 ---
+
+# ADR-014: Contract-First API and Event Design
+
+**Status:** Accepted  
+**Date:** 2026-03-01  
+**Author:** Dallas (Lead & Architect)  
+**Requested by:** Chad Green
+
+## Summary
+
+All REST API endpoints and all Azure Service Bus topics must have an **approved specification before implementation begins**.
+
+- REST APIs → **OpenAPI 3.1** spec in `docs/api/openapi/`
+- Service Bus topics → **AsyncAPI 3.0.0** spec in `docs/api/asyncapi/`
+
+Approval gate: spec PR merged → implementation PR opened. No exceptions.
+
+## Context
+
+CFP Compass exposes a public REST API (consumed by the Blazor web app and potentially third-party integrators) and an event-driven backend via Azure Service Bus. Without a contract-first discipline, APIs and events evolve organically, leading to undocumented breaking changes, mismatched producer/consumer expectations, and difficulty onboarding new consumers.
+
+## Decision
+
+**Contract-first / design-first discipline is mandatory for all API and event work.**
+
+1. OpenAPI 3.1 spec approved → REST endpoint implementation begins
+2. AsyncAPI 3.0.0 spec approved → Service Bus producer/consumer implementation begins
+
+## Spec Locations
+
+```
+docs/
+  api/
+    openapi/
+      cfp-compass-api-v1.yaml        # REST API spec (OpenAPI 3.1)
+      README.md                       # Approval workflow notes
+    asyncapi/
+      cfp-submissions.asyncapi.yaml  # Submission lifecycle events
+      organizer-claims.asyncapi.yaml # Organizer claim events
+      README.md                       # Approval workflow notes
+```
+
+## Known Topics Requiring AsyncAPI Specs
+
+| Topic | Description |
+|-------|-------------|
+| `cfp-submission-created` | New CFP submission submitted via API |
+| `cfp-submission-updated` | Organizer edited a pending submission |
+| `cfp-submission-approved` | Admin approved/published a submission |
+| `cfp-submission-rejected` | Admin rejected a submission |
+| `cfp-submission-reconsideration` | Organizer requested reconsideration after rejection |
+| `organizer-claim-requested` | Someone requested to claim an unverified listing |
+
+## Tooling
+
+| Tool | Purpose |
+|------|---------|
+| **Spectral** (`spectral:oas`) | OpenAPI spec linting |
+| **AsyncAPI CLI** (`asyncapi validate`) | AsyncAPI spec validation |
+| **oasdiff** | Breaking-change detection between OpenAPI versions |
+| **Scalar / Swashbuckle** | Developer-facing spec serving (not canonical) |
+| **AsyncAPI Studio** | AsyncAPI spec authoring |
+
+## CI Enforcement
+
+- GitHub Actions validates OpenAPI specs with Spectral on every PR touching `docs/api/openapi/`
+- GitHub Actions validates AsyncAPI specs with AsyncAPI CLI on every PR touching `docs/api/asyncapi/`
+- Implementation PRs touching API routes or Service Bus producers/consumers must reference the approved spec PR
+
+## Consequences
+
+- Every new API endpoint requires a spec PR before implementation
+- Every new Service Bus topic requires an AsyncAPI spec PR before implementation
+- Design review happens at the spec level (before code is written), not the code review level
+- APIM imports the OpenAPI spec directly — contract and gateway enforcement stay in sync
+- Breaking change detection (oasdiff) is meaningful because the spec is the source of truth
+
+## Alternatives Rejected
+
+- **Code-first with auto-generated specs:** Auto-generated specs are documentation, not contracts; cannot be reviewed as design artifacts
+- **OpenAPI only (no AsyncAPI):** Service Bus events are as much a public contract as REST endpoints; undocumented event schemas cause producer/consumer mismatches
+
+## Impact by Team
+
+| Team | Impact |
+|------|--------|
+| **Dallas (Lead)** | All new API and event work requires spec PR first; no implementation without approved spec |
+| **Ripley (Backend)** | API endpoint implementation must conform to approved OpenAPI spec; Service Bus producer implementation must conform to approved AsyncAPI spec |
+| **Lambert (Frontend)** | API consumer code generation and integration must use approved OpenAPI specs |
+| **Parker (DevOps)** | API contract documentation and versioning tracking; Spectral + AsyncAPI CLI added to CI pipeline |
+| **Chad (Product)** | Contract-first process now part of team workflow — protects against mid-project API breaking changes |
+
+---

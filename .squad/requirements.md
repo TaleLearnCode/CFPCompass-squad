@@ -1,7 +1,7 @@
 # CFP Compass — Requirements Breakdown
 
 **Last Updated:** 2026-03-01  
-**Version:** v3.4
+**Version:** v3.5
 **Owner:** Brett (Requirements Analyst)  
 **Project:** CFP Compass — .NET 10 / Azure web application aggregating open Calls for Papers  
 **Features:** 18
@@ -1003,6 +1003,86 @@
 
 ---
 
+### NFR-3: Contract-First API and Event Design
+
+<!-- Updated v3.5: Added NFR-3 — Contract-First API and Event Design -->
+
+**Description:** APIs and event-driven integrations must be designed, specified, and approved before implementation begins. This ensures contracts are clear, reviewable, and prevent breaking changes to consumers.
+
+**Requirements:**
+
+1. **REST API Contracts (OpenAPI 3.1)**
+
+   Every REST API endpoint must have an approved OpenAPI 3.1 specification before implementation work begins on that endpoint.
+   
+   - **Specification Format:** OpenAPI 3.1.0 (JSON or YAML)
+   - **Coverage:** All endpoints, HTTP methods, request/response schemas, status codes, error responses, authentication requirements
+   - **Approval Gate:** A specification pull request must be reviewed and merged into the main branch before any implementation PR is opened for that endpoint
+   - **Documentation:** The approved spec is the single source of truth for API consumers; implementation must conform to the spec
+
+2. **Service Bus Event Contracts (AsyncAPI 3.0.0)**
+
+   Every Service Bus topic and its message schema must have an approved AsyncAPI 3.0.0 specification before producer or consumer implementation begins.
+   
+   - **Specification Format:** AsyncAPI 3.0.0 (JSON or YAML)
+   - **Coverage:** Topic name, message schema, payload structure, required fields, data types, message headers, routing key patterns
+   - **Approval Gate:** A specification pull request must be reviewed and merged into the main branch before any producer/consumer implementation PR is opened for that topic
+   - **Known Topics Requiring AsyncAPI Specs:**
+     - CFP Submission Lifecycle (created, updated, approved, rejected, reconsideration requested)
+     - Organizer Claim Events (claim requested, claim verified, claim completed)
+
+3. **Specification Approval Process**
+
+   A specification is considered "approved" when:
+   - The specification pull request has been reviewed by at least one team member
+   - All review comments have been addressed
+   - The pull request has been merged into the main branch
+   - Implementation work may not begin on that API endpoint or event topic until the specification PR is merged
+
+4. **Conformance & Validation**
+
+   The implemented API endpoint or event producer/consumer must conform to its approved specification.
+   
+   - Implementation must match the approved specification exactly
+   - If implementation requires a deviation from the spec, the specification must be revised and re-approved (via pull request) before the implementation change is merged
+   - All deviations must be treated as specification changes requiring review, not implementation "fixes"
+
+5. **Breaking Changes & Versioning**
+
+   Any change to an approved specification that would break existing consumers requires explicit approval and a version increment.
+   
+   - A breaking change is defined as: removing a field, changing a field type, changing an endpoint path, changing HTTP method, adding a required field without a default, or changing response status codes
+   - Breaking changes must be requested as a new API version (e.g., `/api/v2/`) with the old API version maintained for a deprecation period
+   - Breaking changes require a new pull request with specification changes, team review, and approval before implementation begins
+
+6. **Acceptance Criteria**
+
+   - **Given** a team member proposes a new REST API endpoint
+   - **When** they open an OpenAPI 3.1 specification PR
+   - **Then** another team member reviews the spec for completeness, correctness, and alignment with consumer needs
+   - **And** once merged, that spec is the approved contract for implementation
+
+   - **Given** implementation begins on an API endpoint
+   - **When** the specification PR for that endpoint has not been merged
+   - **Then** implementation must not proceed; the specification PR must be approved and merged first
+
+   - **Given** a Service Bus event topic (e.g., "CfpSubmitted") is identified
+   - **When** an AsyncAPI 3.0.0 specification is created
+   - **Then** the spec defines the message payload, required fields, data types, and all variants
+   - **And** the spec PR must be approved and merged before any producer (e.g., submission service) or consumer (e.g., notification worker) is implemented
+
+   - **Given** an approved API specification exists for an endpoint
+   - **When** the implementation is completed
+   - **Then** the implementation must match the spec in all details: endpoints, methods, request/response schemas, status codes, error responses
+   - **And** if a deviation is discovered, the specification must be updated (via PR and review) before the implementation PR is merged
+
+   - **Given** a breaking change to an approved API spec is needed
+   - **When** a team member proposes the change
+   - **Then** the new spec is submitted as a specification PR with a version increment (e.g., `/api/v1/` → `/api/v2/`)
+   - **And** the change must be approved before implementation of the new version begins
+
+---
+
 ## Resolved Decisions
 
 ### Decision 1: Organizer Account Requirement
@@ -1051,6 +1131,7 @@
 
 | Version | Date | Changes |
 |---------|------|---------|
+| v3.5 | 2026-03-01 | Added NFR-3 (Contract-First API and Event Design) — All REST APIs must have approved OpenAPI 3.1 specifications before implementation begins; all Service Bus events must have approved AsyncAPI 3.0.0 specifications before implementation begins. Specifications are reviewed and approved via pull request and serve as the contract for implementation. Breaking changes require version increment and re-approval. |
 | v3.4 | 2026-03-01 | **NFR-1 Expanded:** Health endpoints now require per-service dependency verification. Added status semantics (Healthy/Degraded/Unhealthy), HTTP status codes (200 for operational, 503 for unhealthy), per-service dependency lists (API: SQL+Redis+ServiceBus, Web: API reachability, Workers: SQL+ServiceBus+Redis, Functions: SQL+ServiceBus), and Container Apps probe integration requirements. |
 | v3.3 | 2026-03-01 | Added NFR-1 (Observability) and NFR-2 (Developer Experience) sections driven by .NET Aspire 13.1 adoption. |
 | v3.2 | 2026-02-28 | Added full authoritative taxonomy (10 Primary Domains + 10 Secondary Tag Groups); updated Features 1.1, 1.2, 2.1 to support multi-select categories and topics with proper filter semantics. |
