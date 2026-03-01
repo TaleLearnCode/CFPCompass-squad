@@ -1,8 +1,8 @@
 # CFP Compass — System Architecture
 
-**Version:** v3.0  
+**Version:** v3.1  
 **Author:** Dallas (Lead & Architect)  
-**Date:** 2026-02-28 (v1.0), updated 2026-03-01 (v2.0), updated 2026-03-01 (v3.0)  
+**Date:** 2026-02-28 (v1.0), updated 2026-03-01 (v2.0), updated 2026-03-01 (v3.0), updated 2026-03-01 (v3.1)  
 **Status:** Active — .NET Aspire 13.1 adopted for orchestration and observability
 
 ---
@@ -963,12 +963,75 @@ The switch from Aspire Dashboard (dev) to Azure Monitor (production) is configur
 
 ### Health Check Endpoints
 
-`AddServiceDefaults()` auto-configures health check endpoints:
+#### Aspire ServiceDefaults Integration
+
+For ASP.NET Core projects (Api, Web, Workers), `AddServiceDefaults()` auto-configures health check endpoints:
 
 - `/health` — aggregate health status of all registered dependencies (SQL, Redis, Service Bus, etc.)
 - `/alive` — liveness probe for container orchestration (Container Apps)
 
-Aspire integration packages (`Aspire.Azure.Data.Sql`, `Aspire.StackExchange.Redis`, `Aspire.Azure.Messaging.ServiceBus`) automatically register health checks for their respective dependencies.
+Aspire integration packages (`Aspire.Azure.Data.Sql`, `Aspire.StackExchange.Redis`, `Aspire.Azure.Messaging.ServiceBus`) automatically register health checks for their respective dependencies when consumed.
+
+**CfpCompass.Functions** does not use the ASP.NET Core middleware pipeline in the same way. It uses a manual `HealthCheckFunction` (HTTP trigger) instead — see the Function App pattern below.
+
+#### Per-Service Health Check Responsibilities
+
+| Service | Endpoint | Dependencies Checked |
+|---------|----------|----------------------|
+| **CfpCompass.Api** | `GET /health` | Azure SQL (execute `SELECT 1`), Azure Managed Redis (ping), Azure Service Bus (namespace reachability), Azure Communication Services (**degraded** only — ACS outage does not mark the API Unhealthy) |
+| **CfpCompass.Web** | `GET /health` | CfpCompass.Api reachability (HTTP call to API `/health`). Web has no direct DB/Redis/Service Bus access — all data flows through the API. |
+| **CfpCompass.Workers** | `GET /health` | Azure SQL (execute `SELECT 1`), Azure Service Bus (namespace reachability), Azure Managed Redis (ping) |
+| **CfpCompass.Functions** | `GET /api/health` | Azure SQL (execute `SELECT 1`), Azure Service Bus (namespace reachability). Implemented as `HealthCheckFunction` (HTTP trigger). |
+
+> **ACS degraded policy:** Azure Communication Services is treated as `Degraded` (not `Unhealthy`) to prevent false alarms from transient ACS outages bringing down the API. The API can still serve reads and queue writes when ACS is unavailable; email delivery will resume when ACS recovers.
+
+#### Health Check Response Contract
+
+All health endpoints return a consistent JSON envelope:
+
+```json
+{
+  "status": "Healthy | Degraded | Unhealthy",
+  "components": {
+    "sql":        { "status": "Healthy",   "duration_ms": 12 },
+    "redis":      { "status": "Healthy",   "duration_ms": 3  },
+    "serviceBus": { "status": "Healthy",   "duration_ms": 8  },
+    "acs":        { "status": "Degraded",  "duration_ms": 0  },
+    "api":        { "status": "Healthy",   "duration_ms": 45 }
+  }
+}
+```
+
+**HTTP status mapping:**
+
+| Overall Status | HTTP Status Code |
+|----------------|-----------------|
+| `Healthy` | `200 OK` |
+| `Degraded` | `200 OK` |
+| `Unhealthy` | `503 Service Unavailable` |
+
+Container Apps interprets any non-2xx response (including 503) as a failed probe.
+
+#### Azure Container Apps Probe Configuration
+
+Container Apps supports three probe types, all mapped to `GET /health`:
+
+| Probe | Endpoint | Behaviour |
+|-------|----------|-----------|
+| **Startup probe** | `GET /health` | Grace period on cold start — liveness and readiness probes do not fire until the startup probe succeeds. Accommodates Azure SQL serverless cold-start latency (~10 s). |
+| **Liveness probe** | `GET /health` | If the endpoint returns `503` (Unhealthy), Container Apps **restarts the container**. |
+| **Readiness probe** | `GET /health` | If the endpoint returns anything other than `200` (Healthy or Degraded), Container Apps **removes the instance from the load balancer** until it recovers. |
+
+Healthy and Degraded both return `200 OK`, so a Degraded instance (e.g., ACS unreachable) remains in rotation rather than being restarted or removed.
+
+#### Function App Health Check Pattern
+
+Azure Functions does not expose the same ASP.NET Core middleware pipeline for health check registration. For the Container Apps-hosted Functions model used by CFP Compass:
+
+- `HealthCheckFunction` is an `HttpTrigger` function registered at route `health` → resolves to `GET /api/health`
+- It performs the same dependency checks as the Workers service (SQL + Service Bus)
+- It returns the same JSON response contract defined above
+- Azure Container Apps can probe this endpoint using the same startup/liveness/readiness probe configuration as the other services (pointing to `/api/health` instead of `/health`)
 
 ### Distributed Tracing Across Service Boundaries
 

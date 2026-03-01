@@ -126,3 +126,17 @@ Chad Green confirmed Cloudflare Turnstile + Honeypot as the bot protection strat
 - Aspire integration packages noted in data/caching section (Section 3)
 - Container Registry note: AppHost/ServiceDefaults excluded from Docker images
 
+### Health Check Architecture Finalized (2026-03-01)
+
+**Chad Green directive:** Health check endpoints must verify both liveness and dependency connectivity across all services.
+
+**Decisions recorded in architecture.md §10 (v3.1):**
+
+- **Per-service responsibilities** documented: Api checks SQL + Redis + Service Bus + ACS (degraded); Web checks API reachability only; Workers checks SQL + Service Bus + Redis; Functions checks SQL + Service Bus via `HealthCheckFunction`.
+- **ACS degraded policy:** Azure Communication Services treated as `Degraded` (not `Unhealthy`) — ACS outage must not mark the API Unhealthy or trigger container restarts. API can still serve reads and queue writes.
+- **JSON response contract** standardized: `{ status, components: { sql, redis, serviceBus, acs, api } }` with `duration_ms` per component. `200 OK` for Healthy/Degraded; `503 Service Unavailable` for Unhealthy.
+- **Container Apps probe mapping:** Startup probe (cold-start grace), liveness probe (503 → restart), and readiness probe (non-200 → remove from load balancer) all target `GET /health`. Healthy and Degraded both return 200 so degraded instances stay in rotation.
+- **Functions pattern:** `HealthCheckFunction` is an `HttpTrigger` at route `health` (`GET /api/health`) — bypasses ASP.NET Core middleware pipeline which Functions does not expose in the same way. Same JSON contract as other services. Container Apps probes `/api/health` for the Functions container.
+- **Aspire ServiceDefaults note:** `AddServiceDefaults()` auto-registers `/health` for ASP.NET Core projects (Api, Web, Workers); Functions uses manual `HealthCheckFunction` instead.
+- **No new ADR** — this is an elaboration of the existing health check commitment in ADR-013 and NFR-1.
+

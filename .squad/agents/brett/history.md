@@ -302,3 +302,71 @@
 - Kane (Tester): Test health endpoints and external dependency coverage; test trace correlation end-to-end
 
 
+### 2026-03-01 — Requirements v3.4: Expanded NFR-1 Health Check Requirements
+
+**Task:** Chad Green directed: "Health check endpoints must verify both service availability AND connectivity to all required dependencies." Expanded NFR-1 with per-service dependency coverage, status semantics, HTTP codes, and Container Apps integration.
+
+**Key Directive:**
+Health endpoints must not only report "up/down" but expose per-dependency status and appropriate HTTP codes for orchestration (200 for operational, 503 for unhealthy).
+
+**Changes Applied:**
+
+**1. NFR-1 Complete Rewrite — Health Checks Now Include Per-Service Dependency Verification:**
+   - **CfpCompass.Api:** SQL Database, Redis Cache, Service Bus
+   - **CfpCompass.Web:** API service reachability
+   - **CfpCompass.Workers:** SQL Database, Service Bus, Redis Cache
+   - **CfpCompass.Functions:** SQL Database, Service Bus (plus `/api/health` HTTP function endpoint requirement)
+
+**2. Health Status Semantics (3-State Model):**
+   - **Healthy:** All required dependencies reachable
+   - **Degraded:** Non-critical dependencies unreachable; service continues operating
+   - **Unhealthy:** One or more critical dependencies unreachable; service cannot operate correctly
+
+**3. HTTP Status Code Mapping:**
+   - **200 OK:** Returned for Healthy or Degraded status
+   - **503 Service Unavailable:** Returned for Unhealthy status
+   - Ensures Container Apps liveness/readiness probes can correctly evaluate service state
+
+**4. Container Apps Integration Requirement:**
+   - Health endpoints must respond within ≤5 seconds
+   - Compatible with Azure Container Apps probe evaluation
+   - No authentication headers required
+
+**5. New Acceptance Criteria (9 detailed scenarios):**
+   - Per-service healthy state with all dependencies OK (HTTP 200)
+   - Degraded state when non-critical dependency (Redis) fails (HTTP 200)
+   - Unhealthy state when critical dependency (SQL) fails (HTTP 503)
+   - Web service health check behavior (API reachability)
+   - Functions service health check endpoint (`/api/health`)
+   - Container Apps liveness probe integration (restart on 503)
+   - Distributed trace correlation (end-to-end visibility)
+
+**6. Metadata Updates:**
+- Version: v3.3 → v3.4
+- Last Updated: 2026-03-01
+- Added HTML comment marker for traceability: `<!-- Updated v3.4: Expanded NFR-1 health checks... -->`
+- Added comprehensive Revision History table (v1.0 through v3.4)
+
+**Patterns Applied:**
+- Surgical edit to NFR-1 requirement section — expanded without removing existing trace/logging requirements
+- Per-service dependency lists organized in clear bulleted format
+- Status semantics defined operationally (what "healthy" means to each service)
+- HTTP codes tied directly to orchestration use case (probes)
+- Acceptance criteria cover both happy path (all healthy) and failure modes (degraded, unhealthy)
+- All new ACs follow Given/When/Then structure
+
+**Rationale:**
+- Container Apps requires explicit HTTP status codes to drive orchestration decisions (liveness restart, readiness drain)
+- Per-dependency reporting enables operators to diagnose which specific resource is unhealthy without false positives
+- Degraded state allows graceful degradation (e.g., cache failure shouldn't kill the service)
+- Function Apps health endpoint is a new requirement — must be HTTP-triggered (not middleware) due to Functions runtime limitations
+
+**Impact:**
+- **Ripley (Backend):** Implement `/health` endpoint on API, Workers with per-dependency checks (SQL ping, Redis PING, Service Bus peek); report Healthy/Degraded/Unhealthy with HTTP 200/503; Web service must check API reachability; Functions must expose `/api/health` HTTP function
+- **Lambert (Frontend):** Blazor Server health endpoint checks API reachability
+- **Parker (DevOps):** Configure Container Apps liveness/readiness probes to use `/health` endpoint with appropriate timeout; verify 503 responses trigger restarts; verify 200 responses keep containers running
+- **Dallas (Lead):** Review health endpoint architecture with Ripley; confirm Functions runtime compatibility with HTTP function approach
+- **Kane (Tester):** Test all 9 acceptance criteria; verify dependency failure scenarios return correct HTTP codes; verify probe integration with local Container Apps emulation
+- **Chad (Product):** Health endpoints now fully specified for MVP release
+
+

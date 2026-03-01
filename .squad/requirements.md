@@ -1,7 +1,7 @@
 # CFP Compass — Requirements Breakdown
 
 **Last Updated:** 2026-03-01  
-**Version:** v3.3  
+**Version:** v3.4
 **Owner:** Brett (Requirements Analyst)  
 **Project:** CFP Compass — .NET 10 / Azure web application aggregating open Calls for Papers  
 **Features:** 18
@@ -865,41 +865,106 @@
 
 ### NFR-1: Observability (Distributed Tracing & Health Checks)
 
-**Description:** All service components expose structured observability signals (health checks and distributed traces) to enable production debugging, monitoring, and alerting.
+<!-- Updated v3.4: Expanded NFR-1 health checks to require per-service dependency verification, status semantics (Healthy/Degraded/Unhealthy), and HTTP status codes -->
+
+**Description:** All service components expose structured observability signals (health checks and distributed traces) to enable production debugging, monitoring, alerting, and automated orchestration. Health checks verify not only service availability but also connectivity to all required dependencies, enabling Container Apps and Functions to evaluate liveness and readiness accurately.
 
 **Requirements:**
 
-1. **Health Endpoints**
-   - Every service component (API, background workers, CLI tools) exposes a `/health` endpoint returning HTTP 200 OK + JSON status
-   - Health checks cover all external dependencies: Azure SQL Database, Azure Cache for Redis, Azure Service Bus, Azure Communication Services
-   - Health endpoint is included in Container Apps liveness and readiness probes
-   - Health status is not authenticated (operators and systems need access without credentials)
+1. **Health Endpoints — Availability & Dependency Verification**
+   - Every service component (API, background workers, Function Apps) exposes a health endpoint:
+     - **Container Apps:** HTTP GET `/health`
+     - **Function Apps:** HTTP-triggered function at `/api/health`
+   - Health endpoint is not authenticated (operators and orchestration systems need access without credentials)
+   - Health endpoint returns an overall status (Healthy, Degraded, or Unhealthy) plus the status of each individual required dependency
+   - Response includes timestamp, service name, overall status, and per-dependency status with optional descriptive messages
 
-2. **Distributed Tracing**
+2. **Per-Service Dependency Health Checks**
+
+   - **CfpCompass.Api (Container App)**
+     - Must check: Azure SQL Database, Azure Cache for Redis, Azure Service Bus
+     - Verification method: Attempt connection or lightweight query to each dependency
+     - Report status for each: SQL (ok/fail), Redis (ok/fail), ServiceBus (ok/fail)
+   
+   - **CfpCompass.Web (Container App / Blazor Server)**
+     - Must check: CfpCompass.Api service reachability
+     - Verification method: HTTP GET to Api service `/health` endpoint
+     - Report status: ApiService (ok/fail)
+   
+   - **CfpCompass.Workers (Container App)**
+     - Must check: Azure SQL Database, Azure Service Bus, Azure Cache for Redis
+     - Verification method: Attempt connection or lightweight query to each dependency
+     - Report status for each: SQL (ok/fail), ServiceBus (ok/fail), Redis (ok/fail)
+   
+   - **CfpCompass.Functions (Function App)**
+     - Must check: Azure SQL Database, Azure Service Bus
+     - Verification method: Attempt connection or lightweight query to each dependency
+     - Report status for each: SQL (ok/fail), ServiceBus (ok/fail)
+
+3. **Health Status Semantics**
+
+   - **Healthy:** All required dependencies (as defined per-service) are reachable and responding normally. Service can operate at full capacity.
+   - **Degraded:** One or more non-critical dependencies are unreachable (e.g., optional email service, non-essential cache), but all critical dependencies are available. Service continues operating with reduced capability but no data loss.
+   - **Unhealthy:** One or more critical dependencies (database, service bus, required APIs) are unreachable or not responding. Service cannot operate correctly.
+
+4. **HTTP Status Codes**
+
+   - Health endpoint returns **HTTP 200 OK** if status is Healthy or Degraded
+   - Health endpoint returns **HTTP 503 Service Unavailable** if status is Unhealthy
+   - Orchestration systems (Container Apps liveness/readiness probes, Functions scaling policies) use these codes to evaluate service readiness
+
+5. **Container Apps Integration**
+
+   - Health endpoints must respond within a reasonable timeout (≤5 seconds) to allow Container Apps to complete liveness and readiness probe cycles
+   - Response format (JSON or plain text) must be compatible with Azure Container Apps probe evaluation
+   - Health endpoint must not require HTTP headers (e.g., authentication) that would prevent probe evaluation
+
+6. **Distributed Tracing**
    - All service-to-service calls are traced with a unique trace ID
    - Trace IDs are propagated across service boundaries (SQL, Service Bus, cache, external APIs)
    - Structured logs include the trace ID, allowing correlation of all related log entries
    - Traces are exported to Azure Monitor / Application Insights for production debugging
 
-3. **Structured Logging**
+7. **Structured Logging**
    - All logs include: timestamp, log level, service name, trace ID, message, and contextual fields (user ID, CFP ID, request ID)
    - Log format is JSON or structured text (not free-form) to enable querying and alerting
    - Logs are sent to the same Application Insights instance as traces
 
-4. **Acceptance Criteria**
+8. **Acceptance Criteria**
+
+   - **Given** the CfpCompass.Api health endpoint is called
+   - **When** all dependencies (SQL, Redis, Service Bus) are reachable
+   - **Then** the endpoint returns HTTP 200 OK with overall status "Healthy" and per-dependency statuses "ok" for all three
+
+   - **Given** the CfpCompass.Api health endpoint is called
+   - **When** Redis is unreachable but SQL and Service Bus are reachable
+   - **Then** the endpoint returns HTTP 200 OK with overall status "Degraded" and Redis status "failed"
+
+   - **Given** the CfpCompass.Api health endpoint is called
+   - **When** SQL Database is unreachable
+   - **Then** the endpoint returns HTTP 503 Service Unavailable with overall status "Unhealthy" and SQL status "failed"
+
+   - **Given** the CfpCompass.Web health endpoint is called
+   - **When** the CfpCompass.Api service is reachable
+   - **Then** the endpoint returns HTTP 200 OK with overall status "Healthy" and ApiService status "ok"
+
+   - **Given** the CfpCompass.Web health endpoint is called
+   - **When** the CfpCompass.Api service is unreachable
+   - **Then** the endpoint returns HTTP 503 Service Unavailable with overall status "Unhealthy" and ApiService status "failed"
+
+   - **Given** the CfpCompass.Functions health endpoint is called at `/api/health`
+   - **When** all dependencies (SQL, Service Bus) are reachable
+   - **Then** the endpoint returns HTTP 200 OK with overall status "Healthy" and per-dependency statuses "ok"
+
+   - **Given** a Container Apps liveness probe is configured to call the `/health` endpoint
+   - **When** the service health is Unhealthy
+   - **Then** the probe receives HTTP 503 and Container Apps marks the container for restart
+   - **And** when the service recovers, the probe receives HTTP 200 and the container remains running
 
    - **Given** a speaker submits a CFP via the API and the submission triggers a background job
    - **When** the job processes the CFP
    - **Then** the same trace ID appears in API logs, Service Bus logs, and background worker logs
    - **And** an operator can search Azure Monitor by trace ID to see the full request flow end-to-end
-
-   - **Given** an admin opens the dashboard during development
-   - **When** the admin queries logs or traces
-   - **Then** they can filter by trace ID, service name, or time window to debug issues
-
-   - **Given** the SQL database is unreachable
-   - **When** an operator checks `/health` on the API
-   - **Then** they receive HTTP 503 Service Unavailable with a JSON status object indicating "SQL: Unhealthy"
 
 ---
 
@@ -979,6 +1044,20 @@
 ### Decision 10: Internationalization
 **Answer:** English-only content for MVP. i18n architecture (resource files, locale-aware rendering) must be built in from day 1 — no hard-coded strings in UI.  
 **Impact:** All UI-facing features — no string literals in UI code; resource files required from the start.
+
+---
+
+## Revision History
+
+| Version | Date | Changes |
+|---------|------|---------|
+| v3.4 | 2026-03-01 | **NFR-1 Expanded:** Health endpoints now require per-service dependency verification. Added status semantics (Healthy/Degraded/Unhealthy), HTTP status codes (200 for operational, 503 for unhealthy), per-service dependency lists (API: SQL+Redis+ServiceBus, Web: API reachability, Workers: SQL+ServiceBus+Redis, Functions: SQL+ServiceBus), and Container Apps probe integration requirements. |
+| v3.3 | 2026-03-01 | Added NFR-1 (Observability) and NFR-2 (Developer Experience) sections driven by .NET Aspire 13.1 adoption. |
+| v3.2 | 2026-02-28 | Added full authoritative taxonomy (10 Primary Domains + 10 Secondary Tag Groups); updated Features 1.1, 1.2, 2.1 to support multi-select categories and topics with proper filter semantics. |
+| v3.1 | 2026-02-28 | Added Submitter/Organizer distinction (auto-captured submitter, optional organizer claim); introduced Feature 2.3 (Organizer Claim Flow) with self-service and admin-assisted paths; added Community Contributor persona. |
+| v3.0 | 2026-02-28 | Comprehensive data model expansion (Event Details, CFP Details, Event Scheduling, Expense Coverage, Categorization with ISO 3166 + IANA standards); replaced Favorites with Personal CFP Tracking (Interested/Submitted/Accepted states); added geographic filtering (UN M.49, ISO 3166-1, ISO 3166-2); added organizer submission editing and reconsideration flow (Features 2.1.3, 2.2.4, 2.2.5); introduced Passkeys evaluation note (Epic 3) and APIM integration note (Epic 5). |
+| v2.0 | 2026-02-28 | Resolved all 10 open questions from v1.0; applied decisions to Feature 2.1 (public form, no account required), Features 4.1/4.2 (global notification toggle), Feature 1.4 (Past CFPs Archive with 2 new user stories). |
+| v1.0 | 2026-02-28 | Initial comprehensive requirements breakdown: 6 epics, 15 features, 30+ user stories covering Discovery, Submission, Accounts, Notifications, API, and Administration. Identified 10 critical open questions for team resolution. |
 
 ---
 
