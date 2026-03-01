@@ -783,3 +783,363 @@ docs/
 | **Chad (Product)** | Contract-first process now part of team workflow — protects against mid-project API breaking changes |
 
 ---
+
+
+---
+
+# 2026-03-01 Batch: App Config Decision Revised, ADR-015, MI Gaps
+
+## Q2: Managed Identities — Are We Using Them Everywhere?
+
+## Q2: Managed Identities — Are We Using Them Everywhere?
+
+### Decision: Mostly yes, with three documented gaps to close.
+
+The strong cases are already covered correctly:
+- **Key Vault**: All four services (Web, API, Jobs, Functions) access Key Vault via system-assigned managed identity. ✅
+- **Service Bus**: API uses MI as `Azure Service Bus Data Sender`; Functions uses MI as `Azure Service Bus Data Receiver`. ✅
+- **ACR pull**: Container Apps (API) uses MI for image pull. ✅
+- **Azure SQL (Jobs + Functions)**: Both already granted `db_datareader`/`db_datawriter` RBAC on the SQL database via managed identity — Entra token auth. ✅
+
+**Three gaps to close:**
+
+### Gap 1: Azure SQL — Web and API Container Apps (HIGH priority)
+The current architecture has `AzureSql-ConnectionString` in Key Vault, accessed by the Web and API Container Apps. This means those services use SQL Server authentication credentials, not Entra-based MI auth, for the actual database connection. This is inconsistent with Jobs and Functions (which correctly use MI for SQL).
+
+**Fix:** Add `db_datareader` + `db_datawriter` RBAC grants to the Web and API system-assigned managed identities in Terraform (`identity/` + `sql/` modules). Update the connection string in Key Vault to use `Authentication=Active Directory Managed Identity;` (or use `DefaultAzureCredential` in the EF Core SQL provider). Remove `AzureSql-ConnectionString` from Key Vault once all four services are on MI auth.
+
+### Gap 2: Azure Blob Storage — SAS tokens (MEDIUM priority)
+Blob Storage currently uses SAS tokens. SAS tokens have a fixed expiry, require rotation management, and represent a shared-credential risk if leaked.
+
+**Fix:** Assign `Storage Blob Data Contributor` RBAC to the relevant managed identities (Jobs writes blob data; API and Web read it). Use `DefaultAzureCredential` via the Aspire `Aspire.Azure.Storage.Blobs` integration package. Remove SAS token generation from the application.
+
+### Gap 3: Azure Communication Services (LOW priority)
+ACS is accessed via connection string from Key Vault. ACS does support `ManagedIdentityCredential` via the Azure.Communication.Email SDK.
+
+**Fix:** Assign the `Contributor` role (or the ACS-specific sender role) to the relevant managed identities on the ACS resource. Switch from `EmailClient(connectionString)` to `EmailClient(endpoint, new ManagedIdentityCredential())`. Remove `ACS-ConnectionString` from Key Vault.
+
+**One accepted exception:**
+- **Azure Managed Redis (access key auth)**: Azure Managed Redis does support Entra-based auth, but StackExchange.Redis (the client library behind Aspire's Redis integration) has incomplete support for token-refresh lifecycle management. Staying on access key from Key Vault is the pragmatic call for MVP. Revisit when StackExchange.Redis Entra support matures.
+
+**Summary of MI coverage after gaps are closed:**
+
+| Connection | Auth Method | Status |
+|-----------|------------|--------|
+| Container Apps → Key Vault | Managed Identity | ✅ Done |
+| Container Apps → Service Bus | Managed Identity | ✅ Done |
+| Container Apps → ACR | Managed Identity | ✅ Done |
+| Container Apps → Azure SQL | Managed Identity | ⚠️ Gap 1 (Web + API) |
+| Container Apps → Blob Storage | Managed Identity | ⚠️ Gap 2 |
+| Container Apps → ACS | Managed Identity | ⚠️ Gap 3 |
+| Container Apps → Redis | Access key from KV | ✅ Accepted exception |
+
+---
+
+---
+
+# Decision: Remove /api/ Route Prefix (ADR-015)
+
+# Decision: Remove /api/ Route Prefix (ADR-015)
+
+**Date:** 2026-02-28
+**Author:** Dallas (Lead & Architect)
+**Confirmed by:** Chad Green
+**Status:** Accepted
+**Formal ADR:** `docs/registers/decisions/ADR-015-remove-api-route-prefix.md`
+
+---
+
+## Summary
+
+Remove the `/api/` prefix from all ASP.NET Core API routes in `CFPCompass.Api`. Routes become `/v1/cfps`, `/v1/topics`, etc. instead of `/api/v1/cfps`, `/api/v1/topics`.
+
+## Rationale
+
+The `/api/` prefix disambiguates API routes from page routes on a shared host. `CFPCompass.Api` is a dedicated container with no page routes — disambiguation is unnecessary. APIM is the sole public ingress, and the OpenAPI spec drives APIM import automatically. Clean URLs with no noise.
+
+## Exception
+
+Azure Functions `HealthCheckFunction` keeps `GET /api/health` — that's a Functions host runtime convention, not an application route. Container Apps probes target this path.
+
+## Timing
+
+Decision made before implementation. Renaming after controllers, specs, and APIM policies are written would be significantly more disruptive.
+
+## What Changes
+
+- All controller route attributes: `[Route("v1/...")]` — no `/api/` prefix
+- Canonical OpenAPI spec paths: `/v1/*`
+- Architecture documentation route tables: `/v1/*`
+- APIM: imports spec directly, no manual path config needed
+
+## What Does NOT Change
+
+- Azure Functions health check: `GET /api/health`
+- Versioning scheme: `/v1/` retained
+- APIM product/rate-limit/subscription-key policies: unaffected
+
+
+---
+
+# Revised Decision: Adopt Azure App Configuration
+
+# Revised Decision: Adopt Azure App Configuration
+
+**Date:** 2026-03-02
+**Author:** Dallas (Lead & Architect)
+**Requested by:** Chad Green
+**Status:** Accepted — supersedes previous rejection
+**Supersedes:** Q1 in `dallas-arch-review-config-identity-routes.md`
+
+---
+
+## Background
+
+In the initial arch review (2026-03-02), I recommended against Azure App Configuration, stating that Container Apps environment variables + Key Vault references were sufficient and that App Configuration "only earns its place for dynamic feature flags." Chad Green challenged that position with four counter-arguments. After consideration, I'm revising my position. Chad is right — the original recommendation undervalued the operational benefits of centralized configuration management.
+
+---
+
+## Revised Decision: Adopt Azure App Configuration
+
+Azure App Configuration is adopted as the **central configuration surface** for all CFP Compass services across all environments.
+
+### What Goes Where
+
+| Store | What Lives There | Access Pattern |
+|-------|-----------------|----------------|
+| **Azure App Configuration** | All non-sensitive configuration values: log levels, APIM base URLs, job schedules, pagination defaults, email sender addresses, external service endpoints. All feature flags. Key Vault references for secrets. | Single SDK call via `Microsoft.Extensions.Configuration.AzureAppConfiguration` — one retrieval pattern for everything |
+| **Azure Key Vault** | All secrets: connection strings, OAuth client secrets, JWT signing keys, Turnstile keys, admin email list | Surfaced through App Configuration Key Vault references — code never calls Key Vault SDK directly |
+| **Container Apps env vars** | Only Aspire/runtime bootstrapping values needed before App Configuration connection is established (e.g., the App Configuration endpoint itself) | Terraform-managed, minimal set |
+
+**Key architectural benefit:** One SDK, one pattern. Sensitive and non-sensitive values are both resolved through App Configuration. Key Vault references keep secrets in Key Vault (proper access policies, audit logging, rotation support) while presenting them through the same configuration pipeline. No dual-path code — `IConfiguration["SomeKey"]` works identically whether the backing value is a plain string in App Configuration or a Key Vault reference.
+
+### Feature Flags
+
+Feature flags are managed through App Configuration's built-in feature management construct (`Microsoft.FeatureManagement`). This directly supports CFP Compass's trunk-based development model:
+
+- **Trunk-based development:** All work merges to `main`. Incomplete or risky features ship behind feature flags. Flags are toggled in App Configuration without redeployment.
+- **Flag lifecycle:** Active → Dormant → Deprecated. All states visible in the App Configuration portal at a glance.
+- **Flag evaluation:** `IFeatureManager.IsEnabledAsync("FeatureName")` in application code. Conditional middleware, controller filters, and Blazor component rendering all supported.
+- **No custom flag infrastructure required.** App Configuration's feature flag construct is purpose-built — no need to invent our own toggle table or JSON config.
+
+### Environment Labeling Strategy
+
+App Configuration uses **labels** to separate per-environment configuration. One App Configuration instance, multiple labeled key sets:
+
+| Label | Environment | Applied When |
+|-------|------------|--------------|
+| `dev` | Development | Auto-deployed on merge to `main` |
+| `staging` | Staging / UAT | Pre-production validation |
+| `prod` | Production | Manual-approval gated release |
+
+**How it works:**
+- Keys are stored with environment-specific labels: `Logging:LogLevel:Default` with label `dev` = `Debug`, label `prod` = `Information`.
+- Each Container App's startup configuration specifies which label to load: `.Select(KeyFilter.Any, "prod")`.
+- Feature flags follow the same labeling — a flag can be active in `dev` and `staging` but inactive in `prod`.
+- No Terraform duplication for per-environment values — one App Configuration resource, labeled keys managed via Terraform `azurerm_app_configuration_key` resources.
+
+### Terraform Implications
+
+- **New resource:** `azurerm_app_configuration` provisioned in the `infra/modules/appconfig/` Terraform module (one instance per subscription, shared across environments via labels).
+- **Per-environment keys:** `azurerm_app_configuration_key` resources with label parameter matching the environment.
+- **Key Vault references:** `azurerm_app_configuration_key` with `type = "vault"` and `vault_key_reference` pointing to Key Vault secret URIs.
+- **Managed Identity access:** Each Container App's system-assigned MI granted `App Configuration Data Reader` RBAC role.
+- **Feature flags:** `azurerm_app_configuration_feature` resources for flag definitions.
+- **Estimated cost:** Azure App Configuration Free tier supports up to 10K requests/day — sufficient for MVP. Standard tier (~$1.20/day) if request volume exceeds free tier.
+
+### Previous Guardrail Removed
+
+The planned "no App Configuration in MVP" guardrail (which was to be added to `non-goals-and-guardrails.md`) is **cancelled**. App Configuration is an adopted, provisioned resource.
+
+---
+
+## Why the Original Position Was Wrong
+
+1. **Feature flags are not speculative — they're essential for trunk-based development.** The original position treated feature flags as a future maybe. With trunk-based development confirmed as CFP Compass's branching model, feature flags are a day-one operational requirement, not a nice-to-have.
+
+2. **Central configuration management is operational hygiene, not luxury.** Hunting through Container Apps environment variable panels across three environments to reason about system state is operationally painful. App Configuration provides a single pane of glass for all configuration across all environments.
+
+3. **Single retrieval pattern eliminates dual-path complexity.** The original approach required two patterns: env vars for non-sensitive + Key Vault SDK for sensitive. App Configuration Key Vault references collapse this into one pattern. Less code, fewer bugs, simpler onboarding.
+
+4. **Environment labeling is cleaner than per-environment Terraform variable duplication.** Instead of maintaining parallel `terraform.tfvars` files with every config value duplicated per environment, labels in App Configuration provide native multi-environment support.
+
+---
+
+## Risk Assessment
+
+| Risk | Severity | Mitigation |
+|------|----------|------------|
+| App Configuration outage | LOW | SDK has built-in caching with configurable refresh interval; cached values serve requests during outage |
+| Cost overrun | LOW | Free tier covers MVP; Standard tier is ~$36/month — trivial relative to APIM ($50) |
+| Added dependency | LOW | One additional Azure service, but replaces the complexity of dual-path config management |
+| Bootstrap chicken-and-egg | LOW | App Configuration endpoint is the one env var set on Container Apps; everything else loads from App Config |
+
+---
+
+## Action Items
+
+| Item | Owner | Priority |
+|------|-------|----------|
+| Create `infra/modules/appconfig/` Terraform module | Parker | HIGH |
+| Add `AddAzureAppConfiguration()` to ServiceDefaults | Ripley | HIGH |
+| Migrate non-sensitive env vars to App Configuration keys | Parker | MEDIUM |
+| Create Key Vault references in App Configuration | Parker | MEDIUM |
+| Define initial feature flag set for trunk-based dev | Dallas | MEDIUM |
+| Update `docs/infrastructure/overview.md` with App Config | Dallas | Done |
+| Remove planned no-App-Config guardrail from docs | Dallas | Done (was never added) |
+
+
+---
+
+# Parker — Managed Identity Gap Work Items Created
+
+# Parker — Managed Identity Gap Work Items Created
+
+**Date:** 2026-02-28  
+**Author:** Parker (DevOps)  
+**Status:** Complete  
+
+---
+
+## Summary
+
+Architecture review identified three Managed Identity inconsistencies across our Azure services. Created three GitHub issues to address credential management gaps:
+
+| Issue | Priority | Link | Problem | Fix Category |
+|-------|----------|------|---------|--------------|
+| #2 | HIGH | [Azure SQL: Web + API MI](https://github.com/TaleLearnCode/CFPCompass-squad/issues/2) | Web/API use Key Vault secrets; Jobs/Functions use MI | Passwordless SQL auth |
+| #1 | MEDIUM | [Blob Storage: Replace SAS](https://github.com/TaleLearnCode/CFPCompass-squad/issues/1) | SAS tokens expire & leak-prone | Credential rotation |
+| #3 | LOW | [ACS Email: Use MI](https://github.com/TaleLearnCode/CFPCompass-squad/issues/3) | Connection string in Key Vault | Passwordless ACS access |
+
+---
+
+## Implementation Roadmap
+
+### Phase 1 — SQL (HIGH)
+1. Terraform: Add MI RBAC roles (db_datareader, db_datawriter) to Web + API Container Apps
+2. EF Core: Update connection string pattern to use Active Directory Managed Identity
+3. Verification: Test across dev, staging, prod
+4. Cleanup: Remove AzureSql-ConnectionString from Key Vault
+
+### Phase 2 — Blob Storage (MEDIUM)
+1. Terraform: Identify affected Container Apps; assign Storage Blob Data Contributor role
+2. Dependencies: Requires Aspire Azure Storage Blobs integration package adoption
+3. Code: Refactor to DefaultAzureCredential; remove SAS token generation
+4. Testing: All blob operations across environments
+
+### Phase 3 — ACS Email (LOW)
+1. Terraform: Assign ACS Email sender role to email-sending Container App
+2. SDK: Update email client factory to use ManagedIdentityCredential
+3. Validation: Email delivery across environments
+4. Cleanup: Remove ACS-ConnectionString from Key Vault
+
+---
+
+## Next Steps
+
+- **Ripley/Dallas:** Review SQL and ACS email issues for application-level implications
+- **Parker:** Begin Phase 1 (SQL) as highest security priority; coordinate Terraform + secret rotation
+- **Chad Green:** Confirm email sender domain (ACS issue #3) before MI assignment
+
+---
+
+## Labels Applied
+
+All three issues labeled with:
+- `infrastructure` — Infrastructure/deployment track
+- `security` — Security & credential management
+- `managed-identity` — Managed Identity authentication pattern
+
+Labels created via GitHub API where missing.
+
+
+---
+
+# API Route Prefix Documentation Update
+
+---
+title: API Route Prefix Documentation Update
+author: Ash (Technical Writer)
+date: 2024-01-15
+related_adr: ADR-015
+status: completed
+---
+
+# API Route Prefix Documentation Update
+
+## Summary
+
+Updated all documentation in the `/docs` folder to reflect the route prefix change from `/api/v1/` to `/v1/` as specified in ADR-015. This change removes the redundant `/api/` prefix from application API routes while preserving it for Azure Functions runtime endpoints (e.g., `GET /api/health`).
+
+## Files Updated
+
+### API Contract Documents (`docs/contracts/apis/`)
+
+| File | Replacements |
+|------|--------------|
+| `cfps.md` | 27 |
+| `submissions.md` | 38 |
+| `account.md` | 29 |
+| `metadata.md` | 20 |
+| `claims.md` | 18 |
+| `admin.md` | 24 |
+| `README.md` | 40 |
+| **Subtotal** | **196** |
+
+### Architecture Documents (`docs/architecture/`)
+
+| File | Replacements |
+|------|--------------|
+| `architecture-specifications.md` | 8 |
+| `system-context-and-logical-components.md` | 14 |
+| **Subtotal** | **22** |
+
+### Process Flow Documents (`docs/process-flows/`)
+
+| File | Replacements |
+|------|--------------|
+| `cfp-submission.md` | 15 |
+| `cfp-moderation.md` | 12 |
+| `api-write-pattern.md` | 14 |
+| `organizer-claim.md` | 14 |
+| **Subtotal** | **55** |
+
+### Architecture Guide
+
+| File | Replacements |
+|------|--------------|
+| `architecture-guide.md` | 1 |
+
+## Total Replacements
+
+**276 route references** updated across **14 documentation files** (274 via bulk replacement + 2 manual edits in cfps.md).
+
+## Changes Made
+
+### What Changed
+- All application API route references: `/api/v1/...` → `/v1/...`
+- Examples updated in contract documents, sequence diagrams, and code samples
+- APIM routing examples updated in architecture specifications
+
+### What Did NOT Change
+- Azure Functions health check endpoints remain as `/api/health` (Azure Functions host convention)
+- HttpTrigger route examples in code snippets remain unchanged where they demonstrate Functions-specific routing
+- Frontmatter metadata in all documentation files remains intact and unmodified
+
+## Validation
+
+All replacements were validated to ensure:
+1. No `/api/health` endpoints were modified
+2. No Azure Functions HttpTrigger routes in code examples were altered
+3. Frontmatter metadata blocks remain intact
+4. All endpoint paths follow the new `/v1/...` convention consistently
+
+## Related Work
+
+This documentation update supports the implementation work tracked in ADR-015, which establishes the route prefix change across the API application layer.
+
+---
+
+**Completed by:** Ash  
+**Date:** 2024-01-15
+

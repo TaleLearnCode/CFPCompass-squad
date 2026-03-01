@@ -23,4 +23,26 @@
 
 **Dallas Architecture v1 Complete:** System architecture finalized at `.squad/architecture.md` with 6 ADRs: Azure SQL (Serverless), Blazor Server, ASP.NET Core Identity + Fido2NetLib passkeys, Container Apps Jobs, Redis Basic C0, APIM Consumption. **Read architecture.md before infrastructure provisioning.** DevOps decisions locked: Terraform IaC for Container Apps, SQL (Serverless tier), Redis Basic C0, APIM (Consumption tier), Key Vault, ACR, GitHub Actions CI/CD for containerized deployments. 4 open questions remain for Chad Green (domain, bot protection, taxonomy, email sender).
 
+## Work — Managed Identity Gap Work Items (2026-02-28)
+
+Created three GitHub issues to address passwordless authentication gaps:
+
+1. **Issue #2 (HIGH):** Azure SQL needs Managed Identity for Web + API Container Apps (currently uses Key Vault secret)
+2. **Issue #1 (MEDIUM):** Azure Blob Storage should replace SAS tokens with Managed Identity RBAC
+3. **Issue #3 (LOW):** Azure Communication Services email should use ManagedIdentityCredential instead of connection string
+
+**Actions taken:**
+- Created `infrastructure`, `security`, `managed-identity` GitHub labels (prerequisites missing)
+- All issues include problem statement, multi-phase solutions, and acceptance criteria
+- Summary written to `.squad/decisions/inbox/parker-mi-gaps-created.md`
+- Assigned HIGH priority to SQL issue (largest security gap); MEDIUM/LOW for storage/email
+
+**Next:** Proceed with Phase 1 (SQL) as soon as Dallas/Ripley review application implications.
+
+## Work — MI Gaps Ingested into Decisions (2026-03-01)
+
+Parker's three MI GitHub issues merged into `.squad/decisions.md` with orchestration and session logs. Dallas architecture review (Agent 10) identified gaps; Parker operationalized them into prioritized work items. Decision finalized in orchestration batch; ready for implementation phase.
+
+**Cross-agent awareness:** Dallas (Agent 11) aware of Parker's MI work; noted in ADR-015 decision and infrastructure overview update. Ash unaware of MI gaps (Technical Writer focus); not relevant to documentation scope.
+
 ## Learnings

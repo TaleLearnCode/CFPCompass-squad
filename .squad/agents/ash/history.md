@@ -26,3 +26,24 @@
 ## Learnings
 
 - Joined team at architecture v4.0 / requirements v3.5
+
+- Updated 14 documentation files (274 route references) to reflect ADR-015 route prefix change: /api/v1/ → /v1/. Preserved Azure Functions /api/health endpoints unchanged per Functions host runtime conventions. Used PowerShell bulk replacements for efficiency across large files.
+
+## Work — ADR-015 Documentation Update (2026-03-01)
+
+**Scope:** Bulk documentation update for route prefix removal (ADR-015: `/api/v1/` → `/v1/`)
+
+**Files modified:** 14 documentation files across 3 categories:
+- **API Contract docs** (docs/contracts/apis/): cfps.md (27), submissions.md (38), account.md (29), metadata.md (20), claims.md (18), admin.md (24), README.md (40) = 196 replacements
+- **Architecture docs** (docs/architecture/): architecture-specifications.md (8), system-context-and-logical-components.md (14) = 22 replacements
+- **Process Flow docs** (docs/process-flows/): cfp-submission.md (15), cfp-moderation.md (12), api-write-pattern.md (14), organizer-claim.md (14) = 55 replacements
+- **Architecture guide:** docs/architecture-guide.md (1 replacement)
+
+**Total:** 276 route references updated
+
+**Validation:** No `/api/health` endpoints modified (Azure Functions host convention exception per ADR-015). No HttpTrigger route examples altered. Frontmatter metadata preserved across all files.
+
+**Cross-agent awareness:** Ash aware of ADR-015 decision (Dallas decision) and implemented it in full scope per specification. Dallas (Agent 11) aware of Ash's documentation work; noted completion in orchestration batch.
+
+**Next:** Implementation teams will refactor controllers and APIM routes per ADR-015 decision.
+
