@@ -759,6 +759,66 @@ docs/
 - GitHub Actions validates AsyncAPI specs with AsyncAPI CLI on every PR touching `docs/api/asyncapi/`
 - Implementation PRs touching API routes or Service Bus producers/consumers must reference the approved spec PR
 
+---
+
+## Blob Storage Access via Managed Identity
+
+**Date:** 2026-03-01  
+**Authors:** Ripley (Backend), Parker (Infrastructure)  
+**Issue:** #1  
+**Branch:** `squad/1-blob-storage-managed-identity`  
+**PR:** https://github.com/TaleLearnCode/CFPCompass-squad/pull/4  
+**Status:** Proposed — awaiting PR merge and Dallas architecture review
+
+### Decision
+
+Azure Blob Storage is accessed exclusively via Managed Identity (DefaultAzureCredential). No SAS tokens or connection strings in application code.
+
+### Implementation Pattern
+
+**Infrastructure (Parker):**
+- Terraform module `blob-storage-rbac` assigns `Storage Blob Data Contributor` RBAC role to all three Container Apps (Api, Web, Workers) via Managed Identity
+- Role assignments use `uuidv5` for deterministic naming, preventing Terraform drift
+- Updated `docs/infrastructure/architecture.md` with Managed Identity wiring table and SAS→RBAC migration note
+
+**Application (Ripley):**
+- `BlobServiceClient` registered through .NET Aspire's `AddAzureBlobServiceClient("blobs")` extension
+- `BlobStorageService` receives injected client via constructor — no credential instantiation in code
+- Local development uses Azurite emulator with `RunAsEmulator()` in AppHost
+- Azure environments (staging, production) use system-assigned Managed Identity with RBAC assigned by Parker's Terraform
+
+### Files Created
+
+**Infrastructure (Terraform):**
+- `infrastructure/terraform/modules/blob-storage-rbac/main.tf`
+- `infrastructure/terraform/modules/blob-storage-rbac/variables.tf`
+- `infrastructure/terraform/modules/blob-storage-rbac/outputs.tf`
+- `infrastructure/terraform/modules/blob-storage-rbac/README.md`
+- `infrastructure/terraform/environments/dev/blob-storage-rbac.tf`
+
+**Application (.NET):**
+- `src/CfpCompass.Api/Services/IBlobStorageService.cs`
+- `src/CfpCompass.Api/Services/BlobStorageService.cs`
+- `src/CfpCompass.Api/Extensions/BlobStorageExtensions.cs`
+- `src/CfpCompass.Api/Program.cs`
+- `src/CfpCompass.Api/CfpCompass.Api.csproj`
+- `src/CfpCompass.AppHost/Program.cs`
+- `src/CfpCompass.AppHost/CfpCompass.AppHost.csproj`
+- `src/CfpCompass.ServiceDefaults/Extensions.cs`
+- `src/CfpCompass.ServiceDefaults/CfpCompass.ServiceDefaults.csproj`
+
+### Rationale
+
+- No secrets in code or app settings — eliminates credential leak risk
+- SAS token rotation is operational burden that MI eliminates
+- DefaultAzureCredential works transparently across local, CI, and cloud without code changes
+- Aspire resource model makes Azurite ↔ real storage swap seamless across environments
+- Forward-compatible: all three Container Apps get write permission despite current read-only patterns (prevents second RBAC change if write requirements emerge)
+
+### Open Item
+
+Project naming uses `CfpCompass.{Layer}` per issue spec, but architecture doc uses `CFPCompass.{Layer}`. Dallas or Chad should confirm canonical casing before remaining projects are scaffolded.
+
 ## Consequences
 
 - Every new API endpoint requires a spec PR before implementation

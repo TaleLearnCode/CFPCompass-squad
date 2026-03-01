@@ -54,3 +54,22 @@ Parker's three MI GitHub issues merged into `.squad/decisions.md` with orchestra
 - **Docs were already rich:** `docs/infrastructure/architecture.md` already existed with a detailed Managed Identity wiring table. Surgical edits only — no wholesale rewrites needed.
 - **Ripley owns the application side:** SDK switch (`Aspire.Azure.Storage.Blobs`), `DefaultAzureCredential` wiring, and SAS token removal are Ripley's scope. Parker's work (Terraform RBAC) is a prerequisite, not the whole fix. The issue acceptance criteria span both agents.
 - **Decisions inbox:** Summary written to `.squad/decisions/inbox/parker-issue1-blob-mi.md`.
+
+### Cross-Agent: Ripley's Issue #1 Application Work (2026-03-01)
+
+Ripley scaffolded Issue #1 application layer in parallel. Opened draft PR #4 with:
+- `IBlobStorageService` interface and `BlobStorageService` implementation
+- Aspire integration: `AddAzureBlobServiceClient("blobs")` in AppHost with Azurite emulator for local dev
+- Refactored Program.cs and .csproj files for Api, AppHost, ServiceDefaults
+- Pattern: `BlobServiceClient` injected via DI; DefaultAzureCredential automatic; no secrets in code
+
+Ripley flagged naming question: Issue #1 specifies `CfpCompass.{Layer}`, but architecture.md uses `CFPCompass.{Layer}`. Dallas/Chad to resolve before remaining projects scaffolded.
+
+Parker's Terraform work (RBAC assignments + uuidv5 deterministic naming) is a prerequisite for Ripley's application code.
+
+### Issue #1 — Planning Doc & Role Correction (2026-03-01, session 2)
+- **No Terraform files exist yet** — project is pre-implementation. Wrote `.squad/agents/parker/blob-storage-mi-plan.md` as the authoritative planning document with exact `azurerm_role_assignment` HCL blocks, module variable wiring, and list of items to remove (SAS tokens, `Storage-ConnectionString`).
+- **Web should be Reader, not Contributor:** Previous session assigned `Storage Blob Data Contributor` to all three services. Corrected architecture.md to grant `Storage Blob Data Reader` to Container App (Web) — Web only reads/serves logos, never writes. Contributor is overly permissive for a read-only consumer.
+- **Container Apps Jobs need no blob access at MVP** — Jobs (CfpExpiryJob, DeadlineReminderJob, etc.) do not interact with Blob Storage in the current design. Removed erroneous Contributor assignment from Jobs row.
+- **`Storage-ConnectionString` removed from Key Vault inventory** — overview.md updated with explicit callout: blob access is RBAC-only; storage account name is non-secret App Configuration value.
+- **Decisions inbox written** — `.squad/decisions/inbox/parker-blob-storage-mi.md` documents the final role assignments and cross-agent actions required (Ripley must update `BlobServiceClient`).
