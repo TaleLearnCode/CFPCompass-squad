@@ -119,7 +119,7 @@ Messages with missing required fields or unsupported/missing `schemaVersion` are
 Only messages with `ProductionOrderStatus = OrderNextUnitInitiated` are processed; all others are ignored at the subscription filter level.
 
 **Partial Updates**  
-All fields in the payload overwrite the local record's values for that `productionOrderNumber` / `serialTagNumber`.
+All fields in the payload overwrite the local record's values for that `productionOrderNumber` / `tagNumber`.
 
 ---
 
