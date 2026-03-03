@@ -45,7 +45,7 @@ public sealed class BlobStorageServiceUnitTests
             .ReturnsAsync(Mock.Of<Response<BlobContentInfo>>());
 
         mockContainerClient
-            .Setup(x => x.CreateIfNotExistsAsync(null, null, null, It.IsAny<CancellationToken>()))
+            .Setup(x => x.CreateIfNotExistsAsync(It.IsAny<PublicAccessType>(), null, null, It.IsAny<CancellationToken>()))
             .ReturnsAsync(Mock.Of<Response<BlobContainerInfo>>());
 
         mockContainerClient.Setup(x => x.GetBlobClient(blobName)).Returns(mockBlobClient.Object);
@@ -117,7 +117,7 @@ public sealed class BlobStorageServiceUnitTests
         var mockBlobClient = new Mock<BlobClient>();
 
         mockBlobClient
-            .Setup(x => x.DeleteIfExistsAsync(null, null, It.IsAny<CancellationToken>()))
+            .Setup(x => x.DeleteIfExistsAsync(It.IsAny<DeleteSnapshotsOption>(), null, It.IsAny<CancellationToken>()))
             .ReturnsAsync(Mock.Of<Response<bool>>());
 
         mockContainerClient.Setup(x => x.GetBlobClient(blobName)).Returns(mockBlobClient.Object);
@@ -130,7 +130,7 @@ public sealed class BlobStorageServiceUnitTests
 
         // Assert
         mockBlobClient.Verify(
-            x => x.DeleteIfExistsAsync(null, null, It.IsAny<CancellationToken>()),
+            x => x.DeleteIfExistsAsync(It.IsAny<DeleteSnapshotsOption>(), null, It.IsAny<CancellationToken>()),
             Times.Once);
     }
 
@@ -208,7 +208,7 @@ public sealed class BlobStorageServiceUnitTests
             .ReturnsAsync(Mock.Of<Response<BlobContentInfo>>());
 
         mockContainerClient
-            .Setup(x => x.CreateIfNotExistsAsync(null, null, null, It.IsAny<CancellationToken>()))
+            .Setup(x => x.CreateIfNotExistsAsync(It.IsAny<PublicAccessType>(), null, null, It.IsAny<CancellationToken>()))
             .ReturnsAsync(Mock.Of<Response<BlobContainerInfo>>());
 
         mockContainerClient.Setup(x => x.GetBlobClient(blobName)).Returns(mockBlobClient.Object);

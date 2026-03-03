@@ -1,4 +1,5 @@
 using CfpCompass.Api.Services;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace CfpCompass.Api.Extensions;
 
@@ -11,7 +12,7 @@ public static class BlobStorageExtensions
     /// </summary>
     public static IHostApplicationBuilder AddBlobStorage(this IHostApplicationBuilder builder)
     {
-        builder.AddAzureBlobServiceClient("blobs"); // "blobs" = Aspire resource name defined in AppHost
+        builder.AddAzureBlobClient("blobs"); // "blobs" = Aspire resource name defined in AppHost
         builder.Services.AddSingleton<IBlobStorageService, BlobStorageService>();
         return builder;
     }
