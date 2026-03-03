@@ -1,9 +1,11 @@
 ---
-updated_at: 2026-03-01T12:00:00.000Z
-focus_area: Architecture v2 complete — implementation ready
+updated_at: 2026-03-03T02:33:00.000Z
+focus_area: Issue #1 complete — tests & ADR-013 updated
 active_issues: []
 ---
 
 # What We're Focused On
 
-**Architecture v2 complete.** Dallas has updated the system architecture document (`.squad/architecture.md`) to v2.0 incorporating Chad Green's direction. Key changes: Azure Managed Redis (replacing retired Azure Cache for Redis), APIM Developer tier (replacing Consumption — no cold start, VNet integration), event-driven write pattern via Azure Service Bus + Azure Functions (202 Accepted responses), APIM response caching for reads, multi-select taxonomy with junction tables, and resolved open questions (domain: `cfpcompass.com`, email: `noreply@cfpcompass.com`, taxonomy seeded). Bot protection decision still pending Chad's review. Six new ADRs added (ADR-007 through ADR-011, ADR-005/006 revised). Team is ready to begin implementation — new `CFPCompass.Functions` project added to solution structure.
+**Issue #1 resolved — Blob Storage tests written & ADR-013 updated.** Dallas updated ADR-013 to include both Aspire.Azure.Storage.Blobs (integration) and Aspire.Hosting.Azure.Storage (hosting) packages. Kane wrote 3 xUnit integration tests for BlobStorageService (Upload/Download/Delete against Azurite). Parker scaffolded test project, added to solution, and bumped Microsoft.Extensions.Azure to 1.10.0 (resolves Aspire conflict). Tests verified for ADR-011 compliance (no SAS tokens, MI pattern throughout). All artifacts staged for Scribe merge. 
+
+**Next focus:** CI workflow needs `dotnet test` step (Parker flagged). Ripley awaits test project scaffold before implementing blob storage backend. Backlog issues ready for triage.

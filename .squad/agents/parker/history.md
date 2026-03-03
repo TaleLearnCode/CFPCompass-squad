@@ -47,6 +47,24 @@ Parker's three MI GitHub issues merged into `.squad/decisions.md` with orchestra
 
 ## Learnings
 
+### CFPCompass.Api.Tests Project Scaffold (2026-03-02)
+
+- **Created `tests/CfpCompass.Api.Tests/CfpCompass.Api.Tests.csproj`** — net10.0, xUnit-based, referencing `CfpCompass.Api` and `CfpCompass.AppHost` (with `IsAspireProjectResource="false"`). Added to `CFPCompass.sln` via `dotnet sln add`.
+- **Added `Moq 4.*`** — Kane's gap report omitted it, but `BlobStorageServiceUnitTests.cs` requires it. Included in the project file.
+- **Resolved NuGet package versions:**
+  - `Aspire.Hosting.Testing` → `9.5.2`
+  - `Azure.Storage.Blobs` → `12.27.0`
+  - `Microsoft.Extensions.Logging.Abstractions` → `10.0.3`
+  - `Microsoft.NET.Test.Sdk` → `17.14.1`
+  - `Moq` → `4.20.72`
+  - `xunit` → `2.9.3`
+  - `xunit.runner.visualstudio` → `2.8.2`
+- **Pre-existing version conflict fixed:** `CfpCompass.Api.csproj` had `Microsoft.Extensions.Azure 1.7.6` but `Aspire.Azure.Storage.Blobs 9.1.0` requires `>= 1.10.0`. Bumped to `1.10.0` — this was a latent bug blocking all restores through the Api project.
+- **KubernetesClient NU1902 warning:** `CfpCompass.AppHost` pulls in `KubernetesClient 15.0.1` which has a known moderate-severity vulnerability (GHSA-w7r3-mgwf-4mqq). Not blocking; pre-existing transitive dependency via Aspire.Hosting. Flagged in decisions inbox.
+- **CI note:** `squad-ci.yml` is a placeholder stub (`echo "No build commands configured"`). No `dotnet test` step exists. Integration tests require Docker (Azurite). When CI is wired up, use `--filter "Category=Integration"` to gate integration tests separately from fast unit tests.
+
+
+
 ### Issue #1 — Blob Storage RBAC (2026-03-01)
 
 - **All three Container Apps need Blob Storage access:** `CfpCompass.Api` (upload/read logos), `CfpCompass.Web` (read logos for CDN), `CfpCompass.Workers` (write digests/exports). Assigned `Storage Blob Data Contributor` to all three — simpler and forward-proof.

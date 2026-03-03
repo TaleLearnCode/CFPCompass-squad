@@ -1,0 +1,9 @@
+feat: blob storage tests and ADR-013 update (#1)
+
+- Add CFPCompass.Api.Tests project with Azurite integration tests
+- BlobStorageServiceIntegrationTests: Upload/Download/Delete via IBlobStorageService
+- Bump Microsoft.Extensions.Azure to 1.10.0 (resolves Aspire conflict)
+- Update ADR-013: add Aspire.Azure.Storage.Blobs to integration packages
+- Document aspire-package-pairs skill (hosting+integration travel together)
+
+Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>

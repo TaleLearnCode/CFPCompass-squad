@@ -102,3 +102,24 @@ Decision: drop `/api/` prefix from all ASP.NET Core API routes. Rationale: the p
 - `.squad/decisions/inbox/dallas-adr-015-route-prefix.md` — decision inbox file
 
 
+## Learnings
+
+### ADR-013 Aspire Storage Package Update (2026-03-02)
+
+**Issue:** #1 — Blob Storage Managed Identity handoff from Scribe.
+**Action:** Added `Aspire.Hosting.Azure.Storage` to the AppHost package list in ADR-013 (architecture.md line 1539). The `.csproj` already had the package at Version 9.1.0 — this was a spec-alignment update only.
+**Files updated:** `.squad/architecture.md` (ADR-013), `.squad/decisions/inbox/dallas-adr013-aspire-storage.md` (new).
+**Files deleted:** `.squad/handoff-dallas-adr013-blob-storage.md` (resolved).
+**Learning:** Keep architecture spec package lists in sync when implementation runs ahead of documentation. The AppHost .csproj was correct; the ADR lagged behind.
+
+### ADR-013 Aspire Integration Package Completion (2026-03-02)
+
+**Issue:** #1 — Follow-up to prior AppHost package update.
+**Action:** Prior update added `Aspire.Hosting.Azure.Storage` to AppHost list but omitted the service-side integration package. This update adds `Aspire.Azure.Storage.Blobs` to the integration packages list (used by `CFPCompass.Infrastructure` for health checks, telemetry, and `DefaultAzureCredential`-based DI). Also added inline purpose notes to both Storage entries for future clarity.
+**Files updated:** `.squad/architecture.md` (ADR-013 lines 1539-1540), `.squad/decisions/inbox/dallas-adr013-storage-update.md` (new).
+**Learning:** When updating package dependency lists, always update both sides — hosting packages (AppHost) AND integration packages (service projects). They travel in pairs: the hosting package enables the emulator/resource wiring, the integration package enables DI/health/telemetry in consuming services.
+
+### Cross-Agent Note (2026-03-03 — Scribe)
+
+ADR-013 amendment committed. Aspire.Azure.Storage.Blobs added to integration packages list alongside Aspire.Hosting.Azure.Storage in AppHost list.
+
