@@ -2,10 +2,10 @@
 title: Architecture Specifications
 summary: Architectural design specifications for [Service Name].
 tags:
-	- architecture-specifications
-	- architecture
-	- components
-	- resilience
+  - architecture-specifications
+  - architecture
+  - components
+  - resilience
 ---
 
 # Architecture Specifications: [Service Name]
