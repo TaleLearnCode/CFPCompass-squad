@@ -47,6 +47,16 @@ Parker's three MI GitHub issues merged into `.squad/decisions.md` with orchestra
 
 ## Learnings
 
+### Issue #2 — Azure SQL Managed Identity for Web + API (2026-03-02)
+
+- **SQL data-plane roles cannot use `azurerm_role_assignment`**: `db_datareader` and `db_datawriter` are SQL-level grants inside the database engine, not Azure RBAC roles. The correct Terraform mechanism is `null_resource` + `local-exec` with `sqlcmd --authentication-method=ActiveDirectoryDefault` and T-SQL `CREATE USER ... FROM EXTERNAL PROVIDER; ALTER ROLE ... ADD MEMBER`. This is fundamentally different from the `blob-storage-rbac` pattern (Issue #1) which uses `azurerm_role_assignment` because Blob Storage uses Azure RBAC.
+- **Idempotency guards required**: Wrapped all T-SQL role grants in `IF NOT EXISTS` / `IF IS_ROLEMEMBER` checks so `terraform apply` is safe to re-run without errors.
+- **Principal display name = Container App resource name**: For system-assigned managed identities, the Entra display name defaults to the Container App resource name (e.g., `ca-cfp-compass-api-dev`). This is the name used in `CREATE USER [...] FROM EXTERNAL PROVIDER`.
+- **EF Core connection string format**: `Server=...;Database=...;Authentication=Active Directory Managed Identity;` — no User ID or Password. Aspire `AddAzureSqlServer()` overrides this in local dev automatically.
+- **`sqlcmd` must be installed on CI runners**: GitHub-hosted `ubuntu-latest` runners do not include `sqlcmd`. Added install snippet to the `azure-sql-rbac` module README.
+- **New skill extracted**: `.squad/skills/azure-sql-mi/SKILL.md` — high confidence, covers the null_resource + sqlcmd pattern and all prerequisites.
+- **Decisions inbox**: `.squad/decisions/inbox/parker-issue2-sql-mi.md` — covers the null_resource decision rationale and cross-agent implications.
+
 ### CFPCompass.Api.Tests Project Scaffold (2026-03-02)
 
 - **Created `tests/CfpCompass.Api.Tests/CfpCompass.Api.Tests.csproj`** — net10.0, xUnit-based, referencing `CfpCompass.Api` and `CfpCompass.AppHost` (with `IsAspireProjectResource="false"`). Added to `CFPCompass.sln` via `dotnet sln add`.
