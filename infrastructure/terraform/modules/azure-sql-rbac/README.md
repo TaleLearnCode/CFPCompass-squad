@@ -88,6 +88,6 @@ module "azure_sql_rbac" {
 
 Once all environments are confirmed using MI auth, remove `AzureSql-ConnectionString` from:
 
-1. `infra/modules/keyvault/main.tf` — delete the `azurerm_key_vault_secret` resource for `AzureSql-ConnectionString`
+1. `infrastructure/terraform/modules/key-vault/main.tf` — delete the `azurerm_key_vault_secret` resource for `AzureSql-ConnectionString`
 2. Container App environment variable configuration — remove the Key Vault reference `@Microsoft.KeyVault(SecretUri=...AzureSql-ConnectionString...)`
 3. `docs/infrastructure/overview.md` — remove from the Key Vault secret inventory table
