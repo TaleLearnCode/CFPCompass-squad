@@ -141,12 +141,17 @@ The AppHost project references:
 - `Aspire.Hosting.Azure.ServiceBus`
 - `Aspire.Hosting.Azure.Redis`
 - `Aspire.Hosting.Azure.Sql`
-- `Aspire.Hosting.Azure.CommunicationServices`
+- `Aspire.Hosting.Azure.Storage` — for Blob Storage emulation and configuration injection
 
 Service projects reference:
 - `Aspire.Azure.Messaging.ServiceBus`
 - `Aspire.StackExchange.Redis`
 - `Aspire.Azure.Data.SqlClient`
+- `Aspire.Azure.Storage.Blobs` — for Blob Storage health checks, telemetry, and `DefaultAzureCredential`-based DI
+
+### Azure Communication Services — Not Wired via Aspire
+
+`Aspire.Hosting.Azure.CommunicationServices` does not exist on NuGet; ACS has no local emulator, so Aspire provides no hosting integration. ACS is **not** wired as an Aspire resource in AppHost. See [ADR-013 Amendment: Azure Communication Services Managed Identity](#adr-013-amendment-azure-communication-services-managed-identity) below for configuration and authentication approach.
 
 **Production note:** AppHost is NOT deployed to Azure. Production hosting uses Azure Container Apps + Terraform as defined in ADR-006 and the infrastructure overview. The AppHost is a developer convenience tool only.
 
@@ -154,8 +159,62 @@ Service projects reference:
 
 If the team grows and onboarding friction increases, consider adding a devcontainer configuration (`.devcontainer/devcontainer.json`) that includes `dotnet workload install aspire` in the post-create command, reducing setup to a single VS Code "Reopen in Container" action.
 
+## ADR-013 Amendment: Azure Communication Services Managed Identity
+
+**Date:** 2026-03-03  
+**Issue:** #3 — [MI Gap] Azure Communication Services: Use Managed Identity for email  
+**Status:** Accepted
+
+### Context
+
+Azure Communication Services (ACS) was initially integrated using a connection string from Key Vault. During Issue #3 implementation, the team discovered that `Aspire.Hosting.Azure.CommunicationServices` does not exist on NuGet as a stable or even preview package. ACS has no local emulator, making Aspire hosting integration impossible.
+
+Simultaneously, the managed identity approach was prioritized to eliminate the connection string secret from Key Vault, shifting to `DefaultAzureCredential` for passwordless authentication.
+
+### Decision Outcome
+
+1. **No Aspire Hosting Package for ACS**  
+   ACS is not wired as an Aspire resource in AppHost. The endpoint URI is configured via `ConnectionStrings:acs` (non-sensitive URL) — developers set this manually in `appsettings.Development.json` or user secrets for local dev. In production, the URI is read from environment variable or App Configuration.
+
+2. **Direct EmailClient Instantiation with DefaultAzureCredential**  
+   AcsEmailService instantiates `EmailClient` directly:
+   ```csharp
+   builder.Services.AddSingleton(new EmailClient(
+       new Uri(builder.Configuration["ConnectionStrings:acs"]),
+       new DefaultAzureCredential()
+   ));
+   ```
+   This approach avoids reliance on `Microsoft.Extensions.Azure` factory methods, which may not consistently support URI-based constructor overloads across SDK versions.
+
+3. **RBAC Role Assignment — Api and Workers Only**  
+   Only `CFPCompass.Api` and `CFPCompass.Workers` Container App managed identities receive the `ACS Email Sender` role (role ID: `b9d4cd7b-d855-4f0c-b635-164d572a3f89`). The Blazor Web app does not send email directly (delegates to API). Terraform module `acs-email-rbac` assigns the role.
+
+4. **No ACS-ConnectionString Secret in Key Vault**  
+   The project is greenfield — `ACS-ConnectionString` secret is never provisioned. Only the non-sensitive endpoint URI (`ConnectionStrings:acs`) is stored in app configuration.
+
+### Consequences
+
+- Good, because `DefaultAzureCredential` resolves seamlessly in both local dev (via `AZURE_AUTHORITY_HOST` and `AZURE_CLIENT_ID` from user secrets) and Azure Container Apps (via managed identity).
+- Good, because endpoint URI is non-sensitive — can be stored in App Configuration or environment variables; no Key Vault access required for URL.
+- Good, because RBAC role assignment is least-privilege — only services that send email receive the sender role.
+- Bad, because developers must manually set `ConnectionStrings:acs` in local config (one-time, non-sensitive URI — low friction).
+- Bad, because no local ACS emulator — cannot test email sending against mock; requires integration test against sandbox ACS resource.
+
+### Implementation Notes
+
+- `CFPCompass.Infrastructure/Services/AcsEmailService.cs` — instantiates `EmailClient` with endpoint URI and `DefaultAzureCredential()`.
+- Terraform: `infra/modules/acs-email-rbac/` assigns role to Api and Workers managed identities.
+- `appsettings.Development.json`: `"ConnectionStrings": { "acs": "https://cfpcompass.communication.azure.com/" }`
+- No changes to OpenAPI 3.1 spec required — email operations remain internal to the API (not exposed as endpoints).
+
+### Related Decisions
+
+- **ADR-006:** Managed Identity baseline for all Azure services; connection strings excluded by default.
+- **ADR-013 (this):** Aspire AppHost does NOT wire ACS; no emulator available.
+
 ## Record History
 
 * **Proposed**: 2026-03-01
 * **Accepted**: 2026-03-01
-* **Last Reviewed**: 2026-03-01
+* **Amended**: 2026-03-03 — Azure Communication Services Managed Identity approach documented
+* **Last Reviewed**: 2026-03-03

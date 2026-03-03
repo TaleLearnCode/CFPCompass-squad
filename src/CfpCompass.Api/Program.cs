@@ -4,6 +4,7 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.AddServiceDefaults();
 builder.AddBlobStorage(); // Aspire blob storage — uses DefaultAzureCredential in all environments
+builder.AddAcsEmail();    // ACS email — uses DefaultAzureCredential; no connection string
 
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();

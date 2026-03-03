@@ -1536,8 +1536,8 @@ public class CfpApiTests : IClassFixture<CfpCompassWebApplicationFactory>
 **Implementation notes:**
 - Solution adds two projects: CfpCompass.AppHost (orchestrator, dev-only) and CfpCompass.ServiceDefaults (shared defaults, included in all service projects)
 - All service projects (Api, Web, Workers, Functions) call `builder.AddServiceDefaults()` at startup
-- AppHost references: `Aspire.Hosting.Azure.ServiceBus`, `Aspire.Hosting.Azure.Redis`, `Aspire.Hosting.Azure.Sql`, `Aspire.Hosting.Azure.CommunicationServices`
-- Service projects reference integration packages: `Aspire.Azure.Messaging.ServiceBus`, `Aspire.StackExchange.Redis`, `Aspire.Azure.Data.Sql`
+- AppHost references: `Aspire.Hosting.Azure.ServiceBus`, `Aspire.Hosting.Azure.Redis`, `Aspire.Hosting.Azure.Sql`, `Aspire.Hosting.Azure.Storage` (enables Azurite emulator wiring via `RunAsEmulator()` and blob resource declarations for local dev), `Aspire.Hosting.Azure.CommunicationServices`
+- Service projects reference integration packages: `Aspire.Azure.Messaging.ServiceBus`, `Aspire.StackExchange.Redis`, `Aspire.Azure.Data.Sql`, `Aspire.Azure.Storage.Blobs` (wraps `Azure.Storage.Blobs` with Aspire health checks, telemetry, and `DefaultAzureCredential`-based DI registration via `builder.AddAzureStorageBlobs()`; used by `CFPCompass.Infrastructure`)
 - Production: AppHost is NOT deployed. OpenTelemetry exporters in ServiceDefaults send to Azure Monitor in production (controlled by environment config)
 - AppHost not included in CI/CD deployment pipeline — dev tooling only
 

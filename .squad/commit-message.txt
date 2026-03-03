@@ -1,0 +1,9 @@
+ci: add GitHub Actions workflow and fix integration test filter
+
+- Add squad-ci.yml: two-job workflow (build+unit, integration)
+- Unit job: dotnet build Release + filter Category!=Integration
+- Integration job: needs unit job, filter Category=Integration, Docker available
+- Add [Trait("Category", "Integration")] to BlobStorageServiceIntegrationTests
+  so filter correctly isolates integration tests from unit tests
+
+Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>

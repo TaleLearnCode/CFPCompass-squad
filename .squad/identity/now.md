@@ -1,9 +1,11 @@
 ---
-updated_at: 2026-03-01T12:00:00.000Z
-focus_area: Architecture v2 complete — implementation ready
+updated_at: 2026-03-03T02:40:00.000Z
+focus_area: Issue #1 complete — CI workflow finalized
 active_issues: []
 ---
 
 # What We're Focused On
 
-**Architecture v2 complete.** Dallas has updated the system architecture document (`.squad/architecture.md`) to v2.0 incorporating Chad Green's direction. Key changes: Azure Managed Redis (replacing retired Azure Cache for Redis), APIM Developer tier (replacing Consumption — no cold start, VNet integration), event-driven write pattern via Azure Service Bus + Azure Functions (202 Accepted responses), APIM response caching for reads, multi-select taxonomy with junction tables, and resolved open questions (domain: `cfpcompass.com`, email: `noreply@cfpcompass.com`, taxonomy seeded). Bot protection decision still pending Chad's review. Six new ADRs added (ADR-007 through ADR-011, ADR-005/006 revised). Team is ready to begin implementation — new `CFPCompass.Functions` project added to solution structure.
+**Issue #1 fully resolved.** Blob Storage tests written (Kane), ADR-013 updated (Dallas), test project scaffolded (Parker), and CI workflow finalized (Parker + Kane). Parker wrote `squad-ci.yml` with two-job workflow (build+unit, integration). Kane added `[Trait("Category", "Integration")]` to BlobStorageServiceIntegrationTests for proper CI filtering. All artifacts committed.
+
+**Next focus:** Backlog issues ready for triage. Ripley awaits test project scaffold before implementing blob storage backend.

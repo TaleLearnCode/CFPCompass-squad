@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>CfpCompass.Api.Tests</RootNamespace>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Aspire.Hosting.Testing" Version="9.*" />
+    <PackageReference Include="Azure.Storage.Blobs" Version="12.*" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.*" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.*" />
+    <PackageReference Include="Moq" Version="4.*" />
+    <PackageReference Include="xunit" Version="2.*" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.*" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- API project: gives access to IBlobStorageService and BlobStorageService -->
+    <ProjectReference Include="..\..\src\CfpCompass.Api\CfpCompass.Api.csproj" />
+    <!-- AppHost: needed for Aspire testing reference -->
+    <!-- IsAspireProjectResource="false" prevents Aspire treating the test project as a resource -->
+    <ProjectReference Include="..\..\src\CfpCompass.AppHost\CfpCompass.AppHost.csproj"
+                      IsAspireProjectResource="false" />
+  </ItemGroup>
+
+</Project>
