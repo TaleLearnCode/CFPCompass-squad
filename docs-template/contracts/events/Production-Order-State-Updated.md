@@ -60,7 +60,7 @@ flowchart TB
    - Deserializes the JSON payload.
    - Validates `schemaVersion` and required fields.
    - Maps payload fields to the `ProductionOrders` schema.
-4. The handler performs an **idempotent upsert** into `ConveyanceLocalProductionOrders` keyed by `PartitionKey = siteId` and `RowKey = serialTagNumber`.
+4. The handler performs an **idempotent upsert** into `ConveyanceLocalProductionOrders` keyed by `PartitionKey = siteId` and `RowKey = tagNumber`.
 5. If additional details are required, the handler queries MPO for the latest production order state.
 
 ---
