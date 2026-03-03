@@ -19,6 +19,10 @@
 **Issue:** #1 — Blob Storage Managed Identity.  
 **Decisions:** Added both `Aspire.Hosting.Azure.Storage` (AppHost wiring) and `Aspire.Azure.Storage.Blobs` (service integration) to ADR-013. Aspire packages travel in pairs: hosting enables emulator/resource wiring; integration enables DI/health/telemetry in service projects.
 
+### ADR-013 Amendment: Azure Communication Services Managed Identity (2026-03-03)
+
+**Issue:** #3 — [MI Gap] Azure Communication Services: Use Managed Identity for email.  
+**Status:** Complete — ADR-013 amended to document the ACS managed identity approach. Updated `.squad/architecture.md` section; added new "ADR-013 Amendment" section to the ADR itself.
 
 ## Learnings
 
@@ -40,4 +44,19 @@
 ### Cross-Agent Note (2026-03-03 — Scribe)
 
 ADR-013 amendment committed. Aspire.Azure.Storage.Blobs added to integration packages list alongside Aspire.Hosting.Azure.Storage in AppHost list.
+
+### ADR-013 Amendment: ACS Managed Identity Discovery (2026-03-03 — Dallas)
+
+**Issue:** #3 — [MI Gap] Azure Communication Services: Use Managed Identity for email.
+**Key Discoveries:**
+1. `Aspire.Hosting.Azure.CommunicationServices` does **not exist** on NuGet — no preview, no stable release. ACS has no local emulator.
+2. ACS is not wired as an Aspire resource; endpoint URI configured directly via `ConnectionStrings:acs` in appsettings.
+3. `AcsEmailService` instantiates `EmailClient` directly with `new Uri(endpoint)` + `new DefaultAzureCredential()` — avoids factory method complexity.
+4. RBAC assignment (Terraform `acs-email-rbac` module) grants `ACS Email Sender` role to Api and Workers Container App MIs only.
+5. No `ACS-ConnectionString` secret is provisioned in Key Vault — greenfield project, endpoint URI is non-sensitive.
+
+**Action:** Updated ADR-013 to remove the non-existent `Aspire.Hosting.Azure.CommunicationServices` reference from package list. Added new "ADR-013 Amendment: Azure Communication Services Managed Identity" subsection documenting the decision, consequences, and implementation notes. Updated Record History timestamp.
+**Files updated:** `docs/registers/decisions/ADR-013-dotnet-aspire.md`.
+**Files created:** `.squad/decisions/inbox/dallas-adr013-acs-mi.md` (decision memo).
+**Learning:** Aspire does not provide hosting packages for all Azure services. When a hosting package does not exist (e.g., ACS), configuration must be handled outside Aspire — store URIs in appsettings, endpoints as environment variables, never connection strings. `DefaultAzureCredential` + endpoint URI is the pattern.
 
