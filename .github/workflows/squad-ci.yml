@@ -49,9 +49,14 @@ jobs:
 
   integration-test:
     runs-on: ubuntu-latest
-    # ubuntu-latest includes Docker by default — required for Azurite container
-    # (spun up via Aspire AppHost or directly in test setup via Testcontainers)
     needs: build-and-unit-test
+    services:
+      azurite:
+        image: mcr.microsoft.com/azure-storage/azurite
+        ports:
+          - 10000:10000
+          - 10001:10001
+          - 10002:10002
     steps:
       - uses: actions/checkout@v4
 
