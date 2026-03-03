@@ -870,11 +870,9 @@ Internet
 
 | Secret | Purpose |
 |--------|---------|
-| `AzureSql-ConnectionString` | Database connection |
 | `Redis-ConnectionString` | Cache connection |
 | `ServiceBus-ConnectionString` | Service Bus connection |
 | `ACS-ConnectionString` | Email service |
-| `Storage-ConnectionString` | Blob storage |
 | `Fido2-Origins` | WebAuthn allowed origins |
 | `AdminEmails` | Comma-separated admin email list |
 | `OAuth-Google-ClientId` / `ClientSecret` | Google OAuth |
@@ -883,6 +881,8 @@ Internet
 | `Jwt-SigningKey` | JWT signing for email tokens |
 | `Turnstile-SiteKey` | Cloudflare Turnstile site key (public, stored centrally for config) |
 | `Turnstile-SecretKey` | Cloudflare Turnstile secret key (server-side verification) |
+
+> **Not in Key Vault:** `AzureSql-ConnectionString` and `Storage-ConnectionString` are not stored in Key Vault. Both Azure SQL and Blob Storage are accessed exclusively via Entra Managed Identity — `AzureSql-ConnectionString` was removed (Issue #2); `Storage-ConnectionString` was never added (Issue #1).
 
 **Access method:** Azure Managed Identity on Container Apps → Key Vault access policies. No secrets in app config or environment variables at runtime.
 
