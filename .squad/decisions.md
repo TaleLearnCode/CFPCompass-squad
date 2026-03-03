@@ -761,6 +761,41 @@ docs/
 
 ---
 
+## Azure Communication Services — Managed Identity Pattern
+
+**Date:** 2026-03-03  
+**Author:** Ripley (Backend Dev)  
+**Issue:** #3 — [MI Gap] Azure Communication Services: Use Managed Identity for email  
+**Branch:** `squad/3-acs-managed-identity`  
+**PR:** #12  
+**Status:** Proposed — awaiting code review and merge
+
+### Context
+
+Issue #3 required switching the ACS email client from connection string authentication to Managed Identity. Key design decisions were made during implementation.
+
+### Decisions
+
+1. **No Aspire Hosting Package for ACS**  
+   `Aspire.Hosting.Azure.CommunicationServices` does not exist on NuGet as a stable package. ACS has no local emulator, so there is no Aspire hosting integration to use. Decision: ACS is NOT wired as an Aspire resource in AppHost. The endpoint URI is read from `ConnectionStrings:acs` — developers set manually in `appsettings.Development.json` or user secrets for local dev. In production, the URI is set via environment variable or Key Vault reference.
+
+2. **Direct `EmailClient` Singleton Registration**  
+   Chose `builder.Services.AddSingleton(new EmailClient(endpoint, new DefaultAzureCredential()))` over `AddAzureClients` factory. The `Azure.Communication.Email` package may not register `AddEmailClient(Uri)` through `Microsoft.Extensions.Azure` in all versions. Direct instantiation is explicit and predictable. `DefaultAzureCredential` resolves correctly in both local dev and Azure Container Apps.
+
+3. **ACS Email Sender RBAC — Api and Workers Only**  
+   Only `CfpCompass.Api` and `CfpCompass.Workers` receive the `ACS Email Sender` role (`b9d4cd7b-d855-4f0c-b635-164d572a3f89`). The Blazor Web app does not send email directly (it calls the API). Azure Functions will need separate role assignments when scaffolded.
+
+4. **No ACS-ConnectionString Secret Provisioning**  
+   The project is greenfield — no `ACS-ConnectionString` Key Vault secret exists yet. No cleanup required. The architecture should never provision this secret; only `ConnectionStrings:acs` (the endpoint URI, non-sensitive) should be used.
+
+### Action Items
+
+- **Parker:** When provisioning the ACS resource via Terraform, do NOT create an `ACS-ConnectionString` Key Vault secret. Only store the endpoint URI in app configuration.
+- **Dallas:** Update ADR-013 (Aspire AppHost packages) to note ACS has no Aspire hosting/integration package — endpoint URI configured via `ConnectionStrings:acs` directly.
+- **Skill update:** `.squad/skills/azure-sdk-managed-identity/SKILL.md` covers both Aspire-integrated and direct-registration MI patterns for all Azure SDK clients.
+
+---
+
 ## Blob Storage Access via Managed Identity
 
 **Date:** 2026-03-01  

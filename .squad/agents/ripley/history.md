@@ -64,10 +64,6 @@ Parker created Terraform module for Issue #1 in parallel. Infrastructure half co
 
 Ripley's application code depends on Parker's Terraform RBAC assignments. Parker confirmed all three Container Apps need Blob access.
 
-### Cross-Agent Note (2026-03-03 — Scribe)
-
-Tests written by Kane for BlobStorageService are at `tests/CfpCompass.Api.Tests/BlobStorageServiceIntegrationTests.cs`. Note: DeleteAsync returns Task (not Task<bool> as in the plan). Tests verify deletion via ExistsAsync.
-
 ### Issue #3 — ACS Email via Managed Identity (2026-03-03)
 
 - **Finding:** `Aspire.Hosting.Azure.CommunicationServices` does NOT exist on NuGet. ACS has no local emulator, so there is no Aspire resource abstraction to use. ACS is configured via plain `ConnectionStrings:acs` (the endpoint URI).
@@ -75,4 +71,10 @@ Tests written by Kane for BlobStorageService are at `tests/CfpCompass.Api.Tests/
 - **RBAC:** ACS Email Sender role (`b9d4cd7b-d855-4f0c-b635-164d572a3f89`) assigned to `Api` and `Workers` Container Apps. Web does not send email directly.
 - **No cleanup needed:** Project is greenfield — `ACS-ConnectionString` Key Vault secret was never provisioned. Architecture should never create it.
 - **Skill created:** `.squad/skills/azure-sdk-managed-identity/SKILL.md` — covers both Aspire-integrated and direct-registration MI patterns for all Azure SDK clients.
-- **Decision doc:** `.squad/decisions/inbox/ripley-issue3-acs-mi.md` — action items for Parker (don't create ACS-ConnectionString secret) and Dallas (update ADR-013 ACS note).
+- **Decision doc:** `.squad/decisions/inbox/ripley-issue3-acs-mi.md` merged into `.squad/decisions.md` by Scribe (2026-03-03)
+- **PR #12** opened on `squad/3-acs-managed-identity`
+- **Cross-agent task:** Parker (Issue #2) completed SQL MI in parallel; blocked on Parker's Key Vault decision re: not provisioning ACS-ConnectionString secret
+
+### Cross-Agent Note (2026-03-03 — Scribe)
+
+Tests written by Kane for BlobStorageService are at `tests/CfpCompass.Api.Tests/BlobStorageServiceIntegrationTests.cs`. Note: DeleteAsync returns Task (not Task<bool> as in the plan). Tests verify deletion via ExistsAsync.

@@ -102,3 +102,16 @@ Parker's Terraform work (RBAC assignments + uuidv5 deterministic naming) is a pr
 - **Container Apps Jobs need no blob access at MVP** — Jobs (CfpExpiryJob, DeadlineReminderJob, etc.) do not interact with Blob Storage in the current design. Removed erroneous Contributor assignment from Jobs row.
 - **`Storage-ConnectionString` removed from Key Vault inventory** — overview.md updated with explicit callout: blob access is RBAC-only; storage account name is non-secret App Configuration value.
 - **Decisions inbox written** — `.squad/decisions/inbox/parker-blob-storage-mi.md` documents the final role assignments and cross-agent actions required (Ripley must update `BlobServiceClient`).
+
+### Issue #2 — Azure SQL Managed Identity (2026-03-03)
+- **Completed:** Created `azure-sql-rbac` Terraform module using null_resource pattern with `sqlcmd` for deterministic role assignments
+- **Updated connection string format** in `appsettings.json` to support Managed Identity authentication (removed `Password=` requirement)
+- **Removed `AzureSql-ConnectionString`** from Key Vault documentation — SQL access is RBAC-only
+- **Updated architecture docs** with SQL MI wiring table for Container Apps (Web + API + Functions)
+- **PR #11** opened on `squad/2-azure-sql-managed-identity`
+- **Skill created:** `.squad/skills/azure-sql-mi/SKILL.md` — SQL MI pattern for Team reference
+- **Cross-agent task:** Ripley (Issue #3) completed ACS MI in parallel; no blocking dependencies
+
+### Issue #3 — ACS Managed Identity (Cross-Agent Note, 2026-03-03)
+- **Ripley's work on Issue #3 (ACS Email)** completed in parallel: refactored `AcsEmailService` to use `DefaultAzureCredential` + endpoint URI (no Aspire package exists). Terraform module created; decision documented. **Action item for Parker:** Do NOT create `ACS-ConnectionString` Key Vault secret during ACS resource provisioning — only endpoint URI in app config.
+- **New skill:** `.squad/skills/azure-sdk-managed-identity/SKILL.md` covers both Aspire-integrated and direct-registration MI patterns.
