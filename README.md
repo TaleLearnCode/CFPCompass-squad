@@ -1,1 +1,1 @@
-# CFPCompass-squad
+# CFPCompass

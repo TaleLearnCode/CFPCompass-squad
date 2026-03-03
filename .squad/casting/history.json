@@ -1,0 +1,18 @@
+{
+  "assignments": [
+    {
+      "assignment_id": "cfpcompass-2026-02-28",
+      "universe": "Alien (1979)",
+      "created_at": "2026-02-28T18:14:25Z",
+      "agents": [
+        { "name": "Dallas", "role": "Lead & Architect" },
+        { "name": "Ripley", "role": "Backend Dev" },
+        { "name": "Lambert", "role": "Frontend Dev" },
+        { "name": "Parker", "role": "DevOps / Cloud" },
+        { "name": "Kane", "role": "Tester" },
+        { "name": "Brett", "role": "Requirements Analyst" },
+        { "name": "Ash", "role": "Technical Writer" }
+      ]
+    }
+  ]
+}
