@@ -2,9 +2,9 @@
 title: Architecture Guide
 summary: High-level architectural overview for [System/Service Name].
 tags:
-	- architecture
-	- guide
-	- overview
+  - architecture
+  - guide
+  - overview
 ---
 
 # Architecture Guide
