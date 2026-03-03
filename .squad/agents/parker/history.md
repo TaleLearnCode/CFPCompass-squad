@@ -115,3 +115,14 @@ Parker's Terraform work (RBAC assignments + uuidv5 deterministic naming) is a pr
 ### Issue #3 — ACS Managed Identity (Cross-Agent Note, 2026-03-03)
 - **Ripley's work on Issue #3 (ACS Email)** completed in parallel: refactored `AcsEmailService` to use `DefaultAzureCredential` + endpoint URI (no Aspire package exists). Terraform module created; decision documented. **Action item for Parker:** Do NOT create `ACS-ConnectionString` Key Vault secret during ACS resource provisioning — only endpoint URI in app config.
 - **New skill:** `.squad/skills/azure-sdk-managed-identity/SKILL.md` covers both Aspire-integrated and direct-registration MI patterns.
+
+### Aspire Workload Deprecation Fix — PR #11 / squad/2-azure-sql-managed-identity (2026-03-03)
+
+- **Root cause of NETSDK1228:** .NET 10 SDK raises this error when `IsAspireHost=true` but `AspireHostingSDKVersion` is unset. This property is ONLY set by the `Aspire.AppHost.Sdk` MSBuild SDK — NOT by the `Aspire.Hosting.AppHost` NuGet package alone.
+- **Fix:** Add `<Sdk Name="Aspire.AppHost.Sdk" Version="9.1.0" />` inside the `<Project>` block of AppHost.csproj. Both the SDK and NuGet package reference are required.
+- **Cascading errors unmasked:** Once AppHost compiled, 4 pre-existing issues surfaced that were masked by the early build abort:
+  1. `ServiceDefaults/Extensions.cs` — 4 missing `using` directives (Builder, DI, Logging, OTel.Logs). The most subtle: `using Microsoft.Extensions.Logging;` is required for `ILoggingBuilder.AddOpenTelemetry(Action<>)` overload resolution — omitting it gives CS1501 ("no overload takes 1 arguments") even with `using OpenTelemetry.Logs;` present.
+  2. `BlobStorageExtensions.cs` — wrong method name: `AddAzureBlobServiceClient` does not exist; correct name is `AddAzureBlobClient` in `Aspire.Azure.Storage.Blobs 9.1.0`.
+  3. `BlobStorageServiceUnitTests.cs` — `null` passed for `PublicAccessType` and `DeleteSnapshotsOption` (non-nullable enums). Azure.Storage.Blobs 12.27.0 changed these from nullable to non-nullable; fix is `It.IsAny<T>()`.
+- **Cross-branch scope:** Applied to both `squad/2-azure-sql-managed-identity` (PR #11) and `squad/3-acs-managed-identity` (PR #12). Decision written to `.squad/decisions/inbox/parker-aspire-workload-fix.md`.
+- **Non-Web SDK gotcha:** `Microsoft.NET.Sdk` projects do NOT get implicit usings for ASP.NET Core / Extensions types. All extension methods must be explicitly imported. Only `Microsoft.NET.Sdk.Web` projects have the extended implicit using set.
