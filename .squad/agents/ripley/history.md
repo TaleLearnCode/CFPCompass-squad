@@ -78,3 +78,27 @@ Ripley's application code depends on Parker's Terraform RBAC assignments. Parker
 ### Cross-Agent Note (2026-03-03 — Scribe)
 
 Tests written by Kane for BlobStorageService are at `tests/CfpCompass.Api.Tests/BlobStorageServiceIntegrationTests.cs`. Note: DeleteAsync returns Task (not Task<bool> as in the plan). Tests verify deletion via ExistsAsync.
+
+### Issue #3 CI Fix — Aspire Workload → NuGet Migration (2026-03-03)
+
+**Problem:** PR #12 (`squad/3-acs-managed-identity`) failed CI with NETSDK1228: "This version of the .NET SDK does not support the `aspire` workload." .NET 10 SDK dropped workload-based Aspire distribution. Same root cause as PR #11 (Parker's SQL MI branch).
+
+**Fix applied:**
+1. **AppHost.csproj** — Added `<Sdk Name="Aspire.AppHost.Sdk" Version="9.1.0" />` inside `<Project Sdk="Microsoft.NET.Sdk">`. This is the Aspire 9+ NuGet-based SDK element that replaces the old workload. The `Aspire.Hosting.AppHost` PackageReference was already present; adding the `<Sdk>` element is required in addition.
+2. **Extensions.cs (ServiceDefaults)** — Added missing `using Microsoft.AspNetCore.Builder;`, `using Microsoft.Extensions.DependencyInjection;`, and `using OpenTelemetry.Logs;` to resolve cascade CS0246 errors (`WebApplication` not found) that appeared as a side-effect of the AppHost compile failure.
+
+**Correct Aspire 9+ / .NET 10 AppHost pattern:**
+```xml
+<Project Sdk="Microsoft.NET.Sdk">
+  <Sdk Name="Aspire.AppHost.Sdk" Version="9.1.0" />
+  <PropertyGroup>
+    <IsAspireHost>true</IsAspireHost>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Aspire.Hosting.AppHost" Version="9.1.0" />
+  </ItemGroup>
+</Project>
+```
+The `<Sdk Name="Aspire.AppHost.Sdk" />` element **must be added alongside** (not instead of) the `PackageReference`. Both are required. No global.json workload entries needed.
+
+**Lesson:** Any new Aspire AppHost project must include the `<Sdk Name="Aspire.AppHost.Sdk" Version="9.x" />` element from day one. The `dotnet workload install aspire` pattern is obsolete in .NET 10.
