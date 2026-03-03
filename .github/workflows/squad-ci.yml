@@ -1,28 +1,79 @@
 name: Squad CI
-# Project type was not detected — configure build/test commands below
 
 on:
-  pull_request:
-    branches: [dev, preview, main, insider]
-    types: [opened, synchronize, reopened]
   push:
-    branches: [dev, insider]
+    branches: [main]
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened]
 
 permissions:
   contents: read
 
+env:
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+
 jobs:
-  test:
+  build-and-unit-test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Build and test
-        run: |
-          # TODO: Project type was not detected — add your build/test commands here
-          # Go:            go test ./...
-          # Python:        pip install -r requirements.txt && pytest
-          # .NET:          dotnet test
-          # Java (Maven):  mvn test
-          # Java (Gradle): ./gradlew test
-          echo "No build commands configured — update squad-ci.yml"
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.x'
+
+      - name: Restore dependencies
+        run: dotnet restore CFPCompass.sln
+
+      - name: Build
+        run: dotnet build CFPCompass.sln --no-restore --configuration Release
+
+      - name: Run unit tests
+        run: >
+          dotnet test CFPCompass.sln
+          --no-build
+          --configuration Release
+          --filter "Category!=Integration"
+          --logger trx
+          --results-directory ./TestResults
+
+      - name: Upload unit test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-test-results
+          path: ./TestResults
+
+  integration-test:
+    runs-on: ubuntu-latest
+    # ubuntu-latest includes Docker by default — required for Azurite container
+    # (spun up via Aspire AppHost or directly in test setup via Testcontainers)
+    needs: build-and-unit-test
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.x'
+
+      - name: Restore dependencies
+        run: dotnet restore CFPCompass.sln
+
+      - name: Run integration tests
+        run: >
+          dotnet test tests/CfpCompass.Api.Tests/CfpCompass.Api.Tests.csproj
+          --configuration Release
+          --filter "Category=Integration"
+          --logger trx
+          --results-directory ./TestResults
+
+      - name: Upload integration test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-test-results
+          path: ./TestResults

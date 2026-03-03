@@ -15,6 +15,7 @@ namespace CfpCompass.Api.Tests.Services;
 /// Required packages: xUnit, Azure.Storage.Blobs, Microsoft.Extensions.Logging
 /// Azurite must be running (via Aspire AppHost or standalone container)
 /// </remarks>
+[Trait("Category", "Integration")]
 public sealed class BlobStorageServiceIntegrationTests : IAsyncLifetime
 {
     private const string AzuriteConnectionString = "UseDevelopmentStorage=true";

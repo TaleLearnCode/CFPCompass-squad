@@ -1535,3 +1535,33 @@ Ripley's blob storage implementation plan (Issue #1) requires `Aspire.Hosting.Az
 
 The AppHost .csproj was ahead of the spec — Ripley/Parker had already added the package. This update brings the architecture doc into alignment with the actual project file.
 
+
+---
+
+# Decision: CI Integration Test Filter via Trait Attribute
+
+**Date:** 2026-03-03
+**Author:** Parker (DevOps), Kane (Tester)
+**Issue:** #1 — CI Workflow Scaffolding
+**Status:** Resolved
+
+## Problem
+
+The CI workflow (.github/workflows/squad-ci.yml) requires two jobs:
+1. Unit tests (no Docker): dotnet test --filter "Category!=Integration"
+2. Integration tests (with Docker/Azurite): dotnet test --filter "Category=Integration"
+
+Integration tests in 	ests/CfpCompass.Api.Tests/Services/BlobStorageServiceIntegrationTests.cs were missing the [Trait("Category", "Integration")] class attribute.
+
+## Decision
+
+Added [Trait("Category", "Integration")] at class level on BlobStorageServiceIntegrationTests. All six test methods inherit the trait; no per-method decoration needed.
+
+## Impact
+
+- CI workflow correctly gates integration tests to the second job (Docker available)
+- Unit job runs only unit tests (no Azurite dependency)
+- Integration job waits for unit job to pass, then runs only integration tests
+
+---
+

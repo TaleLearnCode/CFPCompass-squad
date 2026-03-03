@@ -85,6 +85,17 @@ Ripley flagged naming question: Issue #1 specifies `CfpCompass.{Layer}`, but arc
 
 Parker's Terraform work (RBAC assignments + uuidv5 deterministic naming) is a prerequisite for Ripley's application code.
 
+### CI Workflow — squad-ci.yml (2026-03-02)
+
+- **Replaced the placeholder stub** with a proper two-job workflow targeting `push` and `pull_request` to `main`.
+- **Job 1 (`build-and-unit-test`):** restore → build Release → `dotnet test` with `--filter "Category!=Integration"` → upload TRX artifact. Uses `--no-build` on the test step to avoid double-building.
+- **Job 2 (`integration-test`):** `needs: build-and-unit-test`, restore → `dotnet test` on the Api.Tests project with `--filter "Category=Integration"` → upload TRX artifact. Commented that Docker is available on `ubuntu-latest` by default (required for Azurite).
+- **Workflow-level env vars:** `DOTNET_SKIP_FIRST_TIME_EXPERIENCE` and `DOTNET_CLI_TELEMETRY_OPTOUT` both set to `true`.
+- **No secrets required:** Integration tests run against Azurite locally; no Azure credentials in CI.
+- **Existing workflows preserved:** Checked all `.github/workflows/` — the other Squad workflows (`squad-triage.yml`, `squad-release.yml`, `squad-promote.yml`, `squad-preview.yml`, `squad-label-enforce.yml`, `squad-issue-assign.yml`, `squad-insider-release.yml`, `squad-heartbeat.yml`, `squad-docs.yml`, `sync-squad-labels.yml`) are untouched. Only `squad-ci.yml` was modified.
+- **Trait gap found:** `BlobStorageServiceIntegrationTests.cs` has no `[Trait("Category", "Integration")]` on any method or class. The `--filter "Category=Integration"` will match zero tests until Kane adds the class-level trait. Wrote `.squad/decisions/inbox/parker-ci-trait-gap.md` to flag this for Kane.
+- **Filter strategy:** Class-level `[Trait("Category", "Integration")]` is the correct xUnit pattern — decorates all `[Fact]` methods on the class without per-method boilerplate.
+
 ### Issue #1 — Planning Doc & Role Correction (2026-03-01, session 2)
 - **No Terraform files exist yet** — project is pre-implementation. Wrote `.squad/agents/parker/blob-storage-mi-plan.md` as the authoritative planning document with exact `azurerm_role_assignment` HCL blocks, module variable wiring, and list of items to remove (SAS tokens, `Storage-ConnectionString`).
 - **Web should be Reader, not Contributor:** Previous session assigned `Storage Blob Data Contributor` to all three services. Corrected architecture.md to grant `Storage Blob Data Reader` to Container App (Web) — Web only reads/serves logos, never writes. Contributor is overly permissive for a read-only consumer.
