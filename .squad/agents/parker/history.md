@@ -47,16 +47,6 @@ Parker's three MI GitHub issues merged into `.squad/decisions.md` with orchestra
 
 ## Learnings
 
-### Issue #2 — Azure SQL Managed Identity for Web + API (2026-03-02)
-
-- **SQL data-plane roles cannot use `azurerm_role_assignment`**: `db_datareader` and `db_datawriter` are SQL-level grants inside the database engine, not Azure RBAC roles. The correct Terraform mechanism is `null_resource` + `local-exec` with `sqlcmd --authentication-method=ActiveDirectoryDefault` and T-SQL `CREATE USER ... FROM EXTERNAL PROVIDER; ALTER ROLE ... ADD MEMBER`. This is fundamentally different from the `blob-storage-rbac` pattern (Issue #1) which uses `azurerm_role_assignment` because Blob Storage uses Azure RBAC.
-- **Idempotency guards required**: Wrapped all T-SQL role grants in `IF NOT EXISTS` / `IF IS_ROLEMEMBER` checks so `terraform apply` is safe to re-run without errors.
-- **Principal display name = Container App resource name**: For system-assigned managed identities, the Entra display name defaults to the Container App resource name (e.g., `ca-cfp-compass-api-dev`). This is the name used in `CREATE USER [...] FROM EXTERNAL PROVIDER`.
-- **EF Core connection string format**: `Server=...;Database=...;Authentication=Active Directory Managed Identity;` — no User ID or Password. Aspire `AddAzureSqlServer()` overrides this in local dev automatically.
-- **`sqlcmd` must be installed on CI runners**: GitHub-hosted `ubuntu-latest` runners do not include `sqlcmd`. Added install snippet to the `azure-sql-rbac` module README.
-- **New skill extracted**: `.squad/skills/azure-sql-mi/SKILL.md` — high confidence, covers the null_resource + sqlcmd pattern and all prerequisites.
-- **Decisions inbox**: `.squad/decisions/inbox/parker-issue2-sql-mi.md` — covers the null_resource decision rationale and cross-agent implications.
-
 ### CFPCompass.Api.Tests Project Scaffold (2026-03-02)
 
 - **Created `tests/CfpCompass.Api.Tests/CfpCompass.Api.Tests.csproj`** — net10.0, xUnit-based, referencing `CfpCompass.Api` and `CfpCompass.AppHost` (with `IsAspireProjectResource="false"`). Added to `CFPCompass.sln` via `dotnet sln add`.
@@ -112,3 +102,27 @@ Parker's Terraform work (RBAC assignments + uuidv5 deterministic naming) is a pr
 - **Container Apps Jobs need no blob access at MVP** — Jobs (CfpExpiryJob, DeadlineReminderJob, etc.) do not interact with Blob Storage in the current design. Removed erroneous Contributor assignment from Jobs row.
 - **`Storage-ConnectionString` removed from Key Vault inventory** — overview.md updated with explicit callout: blob access is RBAC-only; storage account name is non-secret App Configuration value.
 - **Decisions inbox written** — `.squad/decisions/inbox/parker-blob-storage-mi.md` documents the final role assignments and cross-agent actions required (Ripley must update `BlobServiceClient`).
+
+### Issue #2 — Azure SQL Managed Identity (2026-03-03)
+- **Completed:** Created `azure-sql-rbac` Terraform module using null_resource pattern with `sqlcmd` for deterministic role assignments
+- **Updated connection string format** in `appsettings.json` to support Managed Identity authentication (removed `Password=` requirement)
+- **Removed `AzureSql-ConnectionString`** from Key Vault documentation — SQL access is RBAC-only
+- **Updated architecture docs** with SQL MI wiring table for Container Apps (Web + API + Functions)
+- **PR #11** opened on `squad/2-azure-sql-managed-identity`
+- **Skill created:** `.squad/skills/azure-sql-mi/SKILL.md` — SQL MI pattern for Team reference
+- **Cross-agent task:** Ripley (Issue #3) completed ACS MI in parallel; no blocking dependencies
+
+### Issue #3 — ACS Managed Identity (Cross-Agent Note, 2026-03-03)
+- **Ripley's work on Issue #3 (ACS Email)** completed in parallel: refactored `AcsEmailService` to use `DefaultAzureCredential` + endpoint URI (no Aspire package exists). Terraform module created; decision documented. **Action item for Parker:** Do NOT create `ACS-ConnectionString` Key Vault secret during ACS resource provisioning — only endpoint URI in app config.
+- **New skill:** `.squad/skills/azure-sdk-managed-identity/SKILL.md` covers both Aspire-integrated and direct-registration MI patterns.
+
+### Aspire Workload Deprecation Fix — PR #11 / squad/2-azure-sql-managed-identity (2026-03-03)
+
+- **Root cause of NETSDK1228:** .NET 10 SDK raises this error when `IsAspireHost=true` but `AspireHostingSDKVersion` is unset. This property is ONLY set by the `Aspire.AppHost.Sdk` MSBuild SDK — NOT by the `Aspire.Hosting.AppHost` NuGet package alone.
+- **Fix:** Add `<Sdk Name="Aspire.AppHost.Sdk" Version="9.1.0" />` inside the `<Project>` block of AppHost.csproj. Both the SDK and NuGet package reference are required.
+- **Cascading errors unmasked:** Once AppHost compiled, 4 pre-existing issues surfaced that were masked by the early build abort:
+  1. `ServiceDefaults/Extensions.cs` — 4 missing `using` directives (Builder, DI, Logging, OTel.Logs). The most subtle: `using Microsoft.Extensions.Logging;` is required for `ILoggingBuilder.AddOpenTelemetry(Action<>)` overload resolution — omitting it gives CS1501 ("no overload takes 1 arguments") even with `using OpenTelemetry.Logs;` present.
+  2. `BlobStorageExtensions.cs` — wrong method name: `AddAzureBlobServiceClient` does not exist; correct name is `AddAzureBlobClient` in `Aspire.Azure.Storage.Blobs 9.1.0`.
+  3. `BlobStorageServiceUnitTests.cs` — `null` passed for `PublicAccessType` and `DeleteSnapshotsOption` (non-nullable enums). Azure.Storage.Blobs 12.27.0 changed these from nullable to non-nullable; fix is `It.IsAny<T>()`.
+- **Cross-branch scope:** Applied to both `squad/2-azure-sql-managed-identity` (PR #11) and `squad/3-acs-managed-identity` (PR #12). Decision written to `.squad/decisions/inbox/parker-aspire-workload-fix.md`.
+- **Non-Web SDK gotcha:** `Microsoft.NET.Sdk` projects do NOT get implicit usings for ASP.NET Core / Extensions types. All extension methods must be explicitly imported. Only `Microsoft.NET.Sdk.Web` projects have the extended implicit using set.
