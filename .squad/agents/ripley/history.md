@@ -63,3 +63,7 @@ Parker created Terraform module for Issue #1 in parallel. Infrastructure half co
 - All three Container Apps (Api, Web, Workers) receive `Storage Blob Data Contributor` RBAC
 
 Ripley's application code depends on Parker's Terraform RBAC assignments. Parker confirmed all three Container Apps need Blob access.
+
+### Cross-Agent Note (2026-03-03 — Scribe)
+
+Tests written by Kane for BlobStorageService are at `tests/CfpCompass.Api.Tests/BlobStorageServiceIntegrationTests.cs`. Note: DeleteAsync returns Task (not Task<bool> as in the plan). Tests verify deletion via ExistsAsync.

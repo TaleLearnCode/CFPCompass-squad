@@ -47,6 +47,24 @@ Parker's three MI GitHub issues merged into `.squad/decisions.md` with orchestra
 
 ## Learnings
 
+### CFPCompass.Api.Tests Project Scaffold (2026-03-02)
+
+- **Created `tests/CfpCompass.Api.Tests/CfpCompass.Api.Tests.csproj`** — net10.0, xUnit-based, referencing `CfpCompass.Api` and `CfpCompass.AppHost` (with `IsAspireProjectResource="false"`). Added to `CFPCompass.sln` via `dotnet sln add`.
+- **Added `Moq 4.*`** — Kane's gap report omitted it, but `BlobStorageServiceUnitTests.cs` requires it. Included in the project file.
+- **Resolved NuGet package versions:**
+  - `Aspire.Hosting.Testing` → `9.5.2`
+  - `Azure.Storage.Blobs` → `12.27.0`
+  - `Microsoft.Extensions.Logging.Abstractions` → `10.0.3`
+  - `Microsoft.NET.Test.Sdk` → `17.14.1`
+  - `Moq` → `4.20.72`
+  - `xunit` → `2.9.3`
+  - `xunit.runner.visualstudio` → `2.8.2`
+- **Pre-existing version conflict fixed:** `CfpCompass.Api.csproj` had `Microsoft.Extensions.Azure 1.7.6` but `Aspire.Azure.Storage.Blobs 9.1.0` requires `>= 1.10.0`. Bumped to `1.10.0` — this was a latent bug blocking all restores through the Api project.
+- **KubernetesClient NU1902 warning:** `CfpCompass.AppHost` pulls in `KubernetesClient 15.0.1` which has a known moderate-severity vulnerability (GHSA-w7r3-mgwf-4mqq). Not blocking; pre-existing transitive dependency via Aspire.Hosting. Flagged in decisions inbox.
+- **CI note:** `squad-ci.yml` is a placeholder stub (`echo "No build commands configured"`). No `dotnet test` step exists. Integration tests require Docker (Azurite). When CI is wired up, use `--filter "Category=Integration"` to gate integration tests separately from fast unit tests.
+
+
+
 ### Issue #1 — Blob Storage RBAC (2026-03-01)
 
 - **All three Container Apps need Blob Storage access:** `CfpCompass.Api` (upload/read logos), `CfpCompass.Web` (read logos for CDN), `CfpCompass.Workers` (write digests/exports). Assigned `Storage Blob Data Contributor` to all three — simpler and forward-proof.
@@ -67,9 +85,44 @@ Ripley flagged naming question: Issue #1 specifies `CfpCompass.{Layer}`, but arc
 
 Parker's Terraform work (RBAC assignments + uuidv5 deterministic naming) is a prerequisite for Ripley's application code.
 
+### CI Workflow — squad-ci.yml (2026-03-02)
+
+- **Replaced the placeholder stub** with a proper two-job workflow targeting `push` and `pull_request` to `main`.
+- **Job 1 (`build-and-unit-test`):** restore → build Release → `dotnet test` with `--filter "Category!=Integration"` → upload TRX artifact. Uses `--no-build` on the test step to avoid double-building.
+- **Job 2 (`integration-test`):** `needs: build-and-unit-test`, restore → `dotnet test` on the Api.Tests project with `--filter "Category=Integration"` → upload TRX artifact. Commented that Docker is available on `ubuntu-latest` by default (required for Azurite).
+- **Workflow-level env vars:** `DOTNET_SKIP_FIRST_TIME_EXPERIENCE` and `DOTNET_CLI_TELEMETRY_OPTOUT` both set to `true`.
+- **No secrets required:** Integration tests run against Azurite locally; no Azure credentials in CI.
+- **Existing workflows preserved:** Checked all `.github/workflows/` — the other Squad workflows (`squad-triage.yml`, `squad-release.yml`, `squad-promote.yml`, `squad-preview.yml`, `squad-label-enforce.yml`, `squad-issue-assign.yml`, `squad-insider-release.yml`, `squad-heartbeat.yml`, `squad-docs.yml`, `sync-squad-labels.yml`) are untouched. Only `squad-ci.yml` was modified.
+- **Trait gap found:** `BlobStorageServiceIntegrationTests.cs` has no `[Trait("Category", "Integration")]` on any method or class. The `--filter "Category=Integration"` will match zero tests until Kane adds the class-level trait. Wrote `.squad/decisions/inbox/parker-ci-trait-gap.md` to flag this for Kane.
+- **Filter strategy:** Class-level `[Trait("Category", "Integration")]` is the correct xUnit pattern — decorates all `[Fact]` methods on the class without per-method boilerplate.
+
 ### Issue #1 — Planning Doc & Role Correction (2026-03-01, session 2)
 - **No Terraform files exist yet** — project is pre-implementation. Wrote `.squad/agents/parker/blob-storage-mi-plan.md` as the authoritative planning document with exact `azurerm_role_assignment` HCL blocks, module variable wiring, and list of items to remove (SAS tokens, `Storage-ConnectionString`).
 - **Web should be Reader, not Contributor:** Previous session assigned `Storage Blob Data Contributor` to all three services. Corrected architecture.md to grant `Storage Blob Data Reader` to Container App (Web) — Web only reads/serves logos, never writes. Contributor is overly permissive for a read-only consumer.
 - **Container Apps Jobs need no blob access at MVP** — Jobs (CfpExpiryJob, DeadlineReminderJob, etc.) do not interact with Blob Storage in the current design. Removed erroneous Contributor assignment from Jobs row.
 - **`Storage-ConnectionString` removed from Key Vault inventory** — overview.md updated with explicit callout: blob access is RBAC-only; storage account name is non-secret App Configuration value.
 - **Decisions inbox written** — `.squad/decisions/inbox/parker-blob-storage-mi.md` documents the final role assignments and cross-agent actions required (Ripley must update `BlobServiceClient`).
+
+### Issue #2 — Azure SQL Managed Identity (2026-03-03)
+- **Completed:** Created `azure-sql-rbac` Terraform module using null_resource pattern with `sqlcmd` for deterministic role assignments
+- **Updated connection string format** in `appsettings.json` to support Managed Identity authentication (removed `Password=` requirement)
+- **Removed `AzureSql-ConnectionString`** from Key Vault documentation — SQL access is RBAC-only
+- **Updated architecture docs** with SQL MI wiring table for Container Apps (Web + API + Functions)
+- **PR #11** opened on `squad/2-azure-sql-managed-identity`
+- **Skill created:** `.squad/skills/azure-sql-mi/SKILL.md` — SQL MI pattern for Team reference
+- **Cross-agent task:** Ripley (Issue #3) completed ACS MI in parallel; no blocking dependencies
+
+### Issue #3 — ACS Managed Identity (Cross-Agent Note, 2026-03-03)
+- **Ripley's work on Issue #3 (ACS Email)** completed in parallel: refactored `AcsEmailService` to use `DefaultAzureCredential` + endpoint URI (no Aspire package exists). Terraform module created; decision documented. **Action item for Parker:** Do NOT create `ACS-ConnectionString` Key Vault secret during ACS resource provisioning — only endpoint URI in app config.
+- **New skill:** `.squad/skills/azure-sdk-managed-identity/SKILL.md` covers both Aspire-integrated and direct-registration MI patterns.
+
+### Aspire Workload Deprecation Fix — PR #11 / squad/2-azure-sql-managed-identity (2026-03-03)
+
+- **Root cause of NETSDK1228:** .NET 10 SDK raises this error when `IsAspireHost=true` but `AspireHostingSDKVersion` is unset. This property is ONLY set by the `Aspire.AppHost.Sdk` MSBuild SDK — NOT by the `Aspire.Hosting.AppHost` NuGet package alone.
+- **Fix:** Add `<Sdk Name="Aspire.AppHost.Sdk" Version="9.1.0" />` inside the `<Project>` block of AppHost.csproj. Both the SDK and NuGet package reference are required.
+- **Cascading errors unmasked:** Once AppHost compiled, 4 pre-existing issues surfaced that were masked by the early build abort:
+  1. `ServiceDefaults/Extensions.cs` — 4 missing `using` directives (Builder, DI, Logging, OTel.Logs). The most subtle: `using Microsoft.Extensions.Logging;` is required for `ILoggingBuilder.AddOpenTelemetry(Action<>)` overload resolution — omitting it gives CS1501 ("no overload takes 1 arguments") even with `using OpenTelemetry.Logs;` present.
+  2. `BlobStorageExtensions.cs` — wrong method name: `AddAzureBlobServiceClient` does not exist; correct name is `AddAzureBlobClient` in `Aspire.Azure.Storage.Blobs 9.1.0`.
+  3. `BlobStorageServiceUnitTests.cs` — `null` passed for `PublicAccessType` and `DeleteSnapshotsOption` (non-nullable enums). Azure.Storage.Blobs 12.27.0 changed these from nullable to non-nullable; fix is `It.IsAny<T>()`.
+- **Cross-branch scope:** Applied to both `squad/2-azure-sql-managed-identity` (PR #11) and `squad/3-acs-managed-identity` (PR #12). Decision written to `.squad/decisions/inbox/parker-aspire-workload-fix.md`.
+- **Non-Web SDK gotcha:** `Microsoft.NET.Sdk` projects do NOT get implicit usings for ASP.NET Core / Extensions types. All extension methods must be explicitly imported. Only `Microsoft.NET.Sdk.Web` projects have the extended implicit using set.

@@ -870,11 +870,9 @@ Internet
 
 | Secret | Purpose |
 |--------|---------|
-| `AzureSql-ConnectionString` | Database connection |
 | `Redis-ConnectionString` | Cache connection |
 | `ServiceBus-ConnectionString` | Service Bus connection |
 | `ACS-ConnectionString` | Email service |
-| `Storage-ConnectionString` | Blob storage |
 | `Fido2-Origins` | WebAuthn allowed origins |
 | `AdminEmails` | Comma-separated admin email list |
 | `OAuth-Google-ClientId` / `ClientSecret` | Google OAuth |
@@ -884,7 +882,9 @@ Internet
 | `Turnstile-SiteKey` | Cloudflare Turnstile site key (public, stored centrally for config) |
 | `Turnstile-SecretKey` | Cloudflare Turnstile secret key (server-side verification) |
 
-**Access method:** Azure Managed Identity on Container Apps → Key Vault access policies. No secrets in app config or environment variables at runtime.
+> **Target state / migration note:** `AzureSql-ConnectionString` and `Storage-ConnectionString` are **not** stored in Key Vault in the active architecture. Both Azure SQL and Blob Storage are accessed exclusively via Entra Managed Identity. ADR-001 still documents storing `AzureSql-ConnectionString` in Key Vault for legacy password-based SQL auth — that secret and the ADR-001 reference are being decommissioned (Issue #2) and must be removed from any remaining environments during migration; `Storage-ConnectionString` was never added (Issue #1).
+
+**Access method (current/target):** Azure Managed Identity on Container Apps → Key Vault access policies. No secrets in app config or environment variables at runtime for Azure SQL or Blob Storage.
 
 ### Container Registry
 
@@ -1536,8 +1536,8 @@ public class CfpApiTests : IClassFixture<CfpCompassWebApplicationFactory>
 **Implementation notes:**
 - Solution adds two projects: CfpCompass.AppHost (orchestrator, dev-only) and CfpCompass.ServiceDefaults (shared defaults, included in all service projects)
 - All service projects (Api, Web, Workers, Functions) call `builder.AddServiceDefaults()` at startup
-- AppHost references: `Aspire.Hosting.Azure.ServiceBus`, `Aspire.Hosting.Azure.Redis`, `Aspire.Hosting.Azure.Sql`, `Aspire.Hosting.Azure.CommunicationServices`
-- Service projects reference integration packages: `Aspire.Azure.Messaging.ServiceBus`, `Aspire.StackExchange.Redis`, `Aspire.Azure.Data.Sql`
+- AppHost references: `Aspire.Hosting.Azure.ServiceBus`, `Aspire.Hosting.Azure.Redis`, `Aspire.Hosting.Azure.Sql`, `Aspire.Hosting.Azure.Storage` (enables Azurite emulator wiring via `RunAsEmulator()` and blob resource declarations for local dev), `Aspire.Hosting.Azure.CommunicationServices`
+- Service projects reference integration packages: `Aspire.Azure.Messaging.ServiceBus`, `Aspire.StackExchange.Redis`, `Aspire.Azure.Data.Sql`, `Aspire.Azure.Storage.Blobs` (wraps `Azure.Storage.Blobs` with Aspire health checks, telemetry, and `DefaultAzureCredential`-based DI registration via `builder.AddAzureStorageBlobs()`; used by `CFPCompass.Infrastructure`)
 - Production: AppHost is NOT deployed. OpenTelemetry exporters in ServiceDefaults send to Azure Monitor in production (controlled by environment config)
 - AppHost not included in CI/CD deployment pipeline — dev tooling only
 

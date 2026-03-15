@@ -1261,3 +1261,303 @@ This documentation update supports the implementation work tracked in ADR-015, w
 **Completed by:** Ash  
 **Date:** 2024-01-15
 
+
+---
+
+# Test Project Setup Notes
+
+**From:** Parker (DevOps)
+**Date:** 2026-03-02
+**Related:** Issue #1 — Blob Storage Managed Identity, Kane's gap report
+
+## What Was Done
+
+- Created `tests/CfpCompass.Api.Tests/CfpCompass.Api.Tests.csproj` with net10.0, xUnit, Moq, Azure.Storage.Blobs, Aspire.Hosting.Testing
+- Added project to `CFPCompass.sln`
+- `dotnet restore` succeeds (1 warning, noted below)
+
+## Resolved Package Versions
+
+| Package | Requested | Resolved |
+|---------|-----------|----------|
+| Aspire.Hosting.Testing | 9.* | 9.5.2 |
+| Azure.Storage.Blobs | 12.* | 12.27.0 |
+| Microsoft.Extensions.Logging.Abstractions | 10.* | 10.0.3 |
+| Microsoft.NET.Test.Sdk | 17.* | 17.14.1 |
+| Moq | 4.* | 4.20.72 |
+| xunit | 2.* | 2.9.3 |
+| xunit.runner.visualstudio | 2.* | 2.8.2 |
+
+## Issue Fixed: Microsoft.Extensions.Azure Version Conflict
+
+`CfpCompass.Api.csproj` was pinning `Microsoft.Extensions.Azure 1.7.6`, but `Aspire.Azure.Storage.Blobs 9.1.0` (already present) requires `>= 1.10.0`. This was a **pre-existing latent bug** that would have blocked any restore touching the Api project. Fixed: bumped to `1.10.0`.
+
+## Warning: KubernetesClient Vulnerability (NU1902)
+
+`CfpCompass.AppHost` pulls in `KubernetesClient 15.0.1` as a transitive dependency via Aspire.Hosting. It has a known **moderate severity** vulnerability (GHSA-w7r3-mgwf-4mqq). This is pre-existing and non-blocking, but the team should track it. When `KubernetesClient` releases a patched version compatible with Aspire 9.x, AppHost should be updated.
+
+## CI: Build, Unit Test, and Integration Test Workflow
+
+`squad-ci.yml` runs two jobs on push/PR to `main`:
+
+1. **build-and-unit-test** — restores, builds, and runs all non-integration tests (`--filter "Category!=Integration"`)
+2. **integration-test** — runs integration tests (`--filter "Category=Integration"`) against an Azurite emulator started via Docker in the workflow
+
+When adding new integration tests, follow Kane's guidance:
+- Integration tests require Azurite (started via Docker in CI — see `.github/workflows/squad-ci.yml`)
+- Tag integration tests with `[Trait("Category", "Integration")]`
+- Tag unit tests without that trait (they run by default in the first job)
+
+## Naming Note for Team
+
+Kane's gap report referenced `CFPCompass.Api.Tests` (all-caps) but the actual directory and namespace across all existing source projects is `CfpCompass` (lowercase 'f'). The csproj was created with `CfpCompass` casing to match the codebase. This is consistent with the naming convention discussion flagged by Ripley in PR #4.
+
+---
+
+# Gaps Found: Blob Storage Integration Tests
+
+**From:** Kane (Tester)  
+**Date:** 2026-03-02  
+**Issue:** #1 — Blob Storage Managed Identity  
+**Related:** `.squad/handoff-kane-blob-storage-tests.md`
+
+## Summary
+
+Integration tests for `BlobStorageService` have been written at `tests/CFPCompass.Api.Tests/BlobStorageServiceIntegrationTests.cs`. The test file cannot be compiled or run until Parker completes the project setup below.
+
+---
+
+## Parker Action Items
+
+### 1. Create test project file
+
+Create `tests/CFPCompass.Api.Tests/CFPCompass.Api.Tests.csproj`:
+
+```xml
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>CFPCompass.Api.Tests</RootNamespace>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Aspire.Hosting.Testing" Version="9.*" />
+    <PackageReference Include="Azure.Storage.Blobs" Version="12.*" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.*" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.*" />
+    <PackageReference Include="xunit" Version="2.*" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.*" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- API project: gives access to IBlobStorageService and BlobStorageService -->
+    <ProjectReference Include="..\..\src\CfpCompass.Api\CfpCompass.Api.csproj" />
+    <!-- AppHost: needed for Projects.CfpCompass_AppHost Aspire testing reference -->
+    <!-- IsAspireProjectResource="false" prevents Aspire treating the test project as a resource -->
+    <ProjectReference Include="..\..\src\CfpCompass.AppHost\CfpCompass.AppHost.csproj"
+                      IsAspireProjectResource="false" />
+  </ItemGroup>
+
+</Project>
+```
+
+### 2. Add project to solution
+
+```bash
+dotnet sln CFPCompass.sln add tests/CFPCompass.Api.Tests/CFPCompass.Api.Tests.csproj
+```
+
+### 3. Docker in CI
+
+These tests require Docker to be running (Azurite is a Docker container). In GitHub Actions, ensure the job runner has Docker available (standard `ubuntu-latest` runners have Docker). Add a `Category=Integration` filter to separate these from fast unit tests if needed:
+
+```yaml
+- name: Run integration tests
+  run: dotnet test tests/CFPCompass.Api.Tests/ --filter "Category=Integration"
+```
+
+---
+
+## Interface Divergence from Ripley's Plan (FYI — no action needed from Parker)
+
+Ripley's plan (`blob-storage-mi-plan.md`) shows `DeleteAsync` returning `Task<bool>`. The actual implementation returns `Task` (void). Tests use `ExistsAsync` to verify deletion. Ripley should note this discrepancy in case the plan document gets re-used.
+
+The interface and implementation currently live in `CfpCompass.Api.Services` — Ripley's plan places them in `CFPCompass.Application.Interfaces` / `CFPCompass.Infrastructure.Services`. When the Application/Infrastructure separation is done, the test's `using` directive and `ProjectReference` will need updating.
+
+---
+
+# Kane — Blob Storage Test Implementation
+
+**Date:** 2026-03-02  
+**Issue:** #1 — Blob Storage Managed Identity  
+**Status:** Tests written, awaiting test project scaffold
+
+## What Was Tested
+
+Created comprehensive test coverage for `BlobStorageService` in `tests/CfpCompass.Api.Tests/Services/`:
+
+### Integration Tests (7 tests)
+1. **UploadAsync_ReturnsPlainUri_WithoutSasParameters** — Verifies returned URI contains no `?sv=` or `?sig=` SAS query parameters
+2. **DownloadAsync_RetrievesUploadedContent_WithIntegrity** — Verifies downloaded content matches uploaded content
+3. **DeleteAsync_RemovesBlob_VerifiedByExists** — Verifies blob removal via Exists check
+4. **ExistsAsync_ReturnsFalse_WhenBlobDoesNotExist** — Verifies non-existent blob detection
+5. **UploadAsync_OverwritesExistingBlob_WithNewContent** — Verifies upload overwrites existing blob
+6. **UploadAsync_HandlesLargeBinaryContent** — Verifies 1MB binary upload integrity
+
+### Unit Tests (6 tests)
+1. **UploadAsync_CallsUploadAsyncOnBlobClient_ReturnsPlainUri** — Verifies SDK method calls and plain URI
+2. **DownloadAsync_CallsDownloadStreamingAsync_ReturnsStream** — Verifies stream return
+3. **DeleteAsync_CallsDeleteIfExistsAsync** — Verifies delete SDK call
+4. **ExistsAsync_CallsExistsAsync_ReturnsTrue** — Verifies exists check (true case)
+5. **ExistsAsync_CallsExistsAsync_ReturnsFalse** — Verifies exists check (false case)
+6. **UploadAsync_LogsInformationMessage** — Verifies logging behavior
+
+## Coverage Gaps
+
+**None identified.** All acceptance criteria from `.squad/handoff-kane-blob-storage-tests.md` are satisfied:
+- ✅ Upload test verifies plain blob URI (no `?sv=`, `?sig=`, or SAS query params)
+- ✅ Download test verifies stream content integrity
+- ✅ Delete test verifies blob removal via Exists
+- ✅ No `StorageSharedKeyCredential`, `BlobSasBuilder`, or `GenerateSasUri` anywhere in test code
+- ✅ Integration tests target Azurite emulator via `UseDevelopmentStorage=true` connection string
+- ✅ Unit tests mock `IBlobStorageService` dependencies (BlobServiceClient, etc.)
+
+## Blocker: Test Project Scaffold Needed
+
+**Action required by Parker or Dallas:**
+
+The test project `tests/CfpCompass.Api.Tests/CfpCompass.Api.Tests.csproj` does not exist. Tests cannot run until the project is scaffolded.
+
+### Commands to scaffold:
+
+```bash
+dotnet new xunit -n CfpCompass.Api.Tests -o tests/CfpCompass.Api.Tests
+cd tests/CfpCompass.Api.Tests
+dotnet add package Azure.Storage.Blobs --version 12.23.0
+dotnet add package Moq --version 4.20.72
+dotnet add package Microsoft.Extensions.Logging --version 10.0.0
+dotnet add reference ..\..\src\CfpCompass.Api\CfpCompass.Api.csproj
+```
+
+Full instructions are in `tests/CfpCompass.Api.Tests/README.md`.
+
+## Security Compliance
+
+All tests follow ADR-011 (Managed Identity for Azure Services):
+- **NO** `StorageSharedKeyCredential` used
+- **NO** `BlobSasBuilder` used
+- **NO** `GenerateSasUri` calls
+- **NO** SAS query parameters (`?sv=`, `?sig=`) in blob URIs
+- Integration tests use Azurite default emulator connection string (not SAS-based)
+- Upload test explicitly asserts absence of SAS params in returned URI
+
+## Next Steps
+
+1. **Parker/Dallas:** Scaffold test project using commands above
+2. **Parker:** Add test project to `.sln` file
+3. **Parker:** Configure CI pipeline to run `dotnet test tests/CfpCompass.Api.Tests/`
+4. **Kane:** Verify tests pass once Azurite is running (via Aspire or standalone Docker)
+5. **Dallas:** Review test coverage and approve for merge
+
+## Handoff Resolution
+
+`.squad/handoff-kane-blob-storage-tests.md` has been deleted. All acceptance criteria satisfied.
+
+---
+
+# Decision: ADR-013 Amendment — Azure Storage Aspire Packages
+
+**Author:** Dallas (Lead & Architect)  
+**Date:** 2026-03-02  
+**Issue:** #1 — Blob Storage Managed Identity  
+**Scope:** ADR-013 (.NET Aspire 13.1 for Orchestration and Observability)
+
+## Amendment
+
+ADR-013's Aspire package lists in `.squad/architecture.md` have been updated to include Azure Storage packages:
+
+### AppHost NuGet packages (added)
+
+| Package | Version | Purpose |
+|---------|---------|---------|
+| `Aspire.Hosting.Azure.Storage` | `9.*` | Enables Azurite emulator wiring via `RunAsEmulator()` and blob resource declarations (`AddBlobs("blob-storage")`) for local dev |
+
+> **Note:** This package was already present in the list from a prior update but lacked a purpose annotation. The annotation has been added.
+
+### Service project integration packages (added)
+
+| Package | Version | Purpose |
+|---------|---------|---------|
+| `Aspire.Azure.Storage.Blobs` | `9.*` | Wraps `Azure.Storage.Blobs` with Aspire health checks, telemetry, and `DefaultAzureCredential`-based DI registration via `builder.AddAzureStorageBlobs()`; consumed by `CFPCompass.Infrastructure` |
+
+## Rationale
+
+Ripley's blob storage implementation plan (`.squad/agents/ripley/blob-storage-mi-plan.md`) requires both packages. The hosting package wires Azurite in the AppHost; the integration package provides the `BlobServiceClient` DI registration with managed identity support in service projects. Omitting either would leave the architecture spec incomplete relative to the implementation plan.
+
+## Impact
+
+- No breaking changes — additive only
+- Ripley can proceed with blob storage implementation per the existing plan
+- Parker's Terraform module (`infra/modules/storage/`) is unaffected
+
+---
+
+# Decision: Add Aspire.Hosting.Azure.Storage to ADR-013
+
+**Date:** 2026-03-02
+**Author:** Dallas (Lead & Architect)
+**Issue:** #1 — Blob Storage Managed Identity
+**Status:** Applied
+
+## Decision
+
+Added `Aspire.Hosting.Azure.Storage` to the AppHost NuGet package list in ADR-013 (`.squad/architecture.md`, Section 15).
+
+## Context
+
+Ripley's blob storage implementation plan (Issue #1) requires `Aspire.Hosting.Azure.Storage` to wire the Azurite emulator in the AppHost for local development. The package was already present in `CfpCompass.AppHost.csproj` (Version 9.1.0) but was missing from the architecture spec's canonical package list.
+
+## Impact
+
+- **architecture.md** — ADR-013 implementation notes updated: AppHost references now include `Aspire.Hosting.Azure.Storage`
+- **CfpCompass.AppHost.csproj** — No change needed; package already present at Version 9.1.0
+- **Handoff resolved** — `.squad/handoff-dallas-adr013-blob-storage.md` deleted
+
+## Notes
+
+The AppHost .csproj was ahead of the spec — Ripley/Parker had already added the package. This update brings the architecture doc into alignment with the actual project file.
+
+
+---
+
+# Decision: CI Integration Test Filter via Trait Attribute
+
+**Date:** 2026-03-03
+**Author:** Parker (DevOps), Kane (Tester)
+**Issue:** #1 — CI Workflow Scaffolding
+**Status:** Resolved
+
+## Problem
+
+The CI workflow (.github/workflows/squad-ci.yml) requires two jobs:
+1. Unit tests (no Docker): dotnet test --filter "Category!=Integration"
+2. Integration tests (with Docker/Azurite): dotnet test --filter "Category=Integration"
+
+Integration tests in 	ests/CfpCompass.Api.Tests/Services/BlobStorageServiceIntegrationTests.cs were missing the [Trait("Category", "Integration")] class attribute.
+
+## Decision
+
+Added [Trait("Category", "Integration")] at class level on BlobStorageServiceIntegrationTests. All six test methods inherit the trait; no per-method decoration needed.
+
+## Impact
+
+- CI workflow correctly gates integration tests to the second job (Docker available)
+- Unit job runs only unit tests (no Azurite dependency)
+- Integration job waits for unit job to pass, then runs only integration tests
+
+---
+

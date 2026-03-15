@@ -83,7 +83,7 @@ GitHub Repository
 ### Terraform Module Structure
 
 ```
-infra/
+infrastructure/terraform/
 ├── main.tf                    # Root module — calls all child modules in order
 ├── variables.tf               # Input variables: environment, region, SKUs, tags
 ├── outputs.tf                 # Outputs: URLs, resource IDs, connection strings (non-secret)
@@ -113,19 +113,23 @@ infra/
 │   ├── frontdoor/             # Front Door (Standard) + Origins + Routes + WAF policy
 │   ├── identity/              # User-assigned managed identities for Container Apps + Functions
 │   ├── blob-storage-rbac/     # Storage Blob Data Contributor RBAC for Container App MIs (Issue #1)
+│   ├── azure-sql-rbac/        # db_datareader/db_datawriter SQL role grants for Web + API MIs (Issue #2)
 │   └── monitoring/            # Log Analytics Workspace + Application Insights
 │
 └── environments/
     ├── dev/
     │   ├── main.tf              # Dev module instantiation with dev-specific overrides
     │   ├── terraform.tfvars     # Dev variable values (SKU overrides, region, tags)
-    │   └── blob-storage-rbac.tf # Blob Storage RBAC caller for dev environment (Issue #1)
+    │   ├── blob-storage-rbac.tf # Blob Storage RBAC caller for dev environment (Issue #1)
+    │   └── azure-sql-rbac.tf    # Azure SQL MI role grants caller for dev environment (Issue #2)
     ├── staging/
     │   ├── main.tf
-    │   └── terraform.tfvars
+    │   ├── terraform.tfvars
+    │   └── azure-sql-rbac.tf    # Azure SQL MI role grants caller for staging (placeholder; activate when staging is provisioned)
     └── prod/
         ├── main.tf
-        └── terraform.tfvars
+        ├── terraform.tfvars
+        └── azure-sql-rbac.tf    # Azure SQL MI role grants caller for prod (placeholder; activate when prod is provisioned)
 ```
 
 **State management:** Remote state is stored in `stcfpcompasstfstate` Storage Account (`rg-cfpcompass-shared`). Each environment has a separate state file (`dev.tfstate`, `staging.tfstate`, `prod.tfstate`). State locking uses Azure Blob lease to prevent concurrent `terraform apply` runs.
@@ -251,12 +255,14 @@ Azure Front Door → APIM
 
 | Resource | Identity | Grants |
 |----------|---------|--------|
-| Container App (Web) | System-assigned | Key Vault: `secrets/get`; Azure Blob Storage: `Storage Blob Data Reader` |
-| Container App (API) | System-assigned | Key Vault: `secrets/get`; Service Bus: `Azure Service Bus Data Sender`; ACR: `AcrPull`; Azure Blob Storage: `Storage Blob Data Contributor` |
+| Container App (Web) | System-assigned | Key Vault: `secrets/get`; Azure SQL: `db_datareader`, `db_datawriter`; Azure Blob Storage: `Storage Blob Data Reader` |
+| Container App (API) | System-assigned | Key Vault: `secrets/get`; Service Bus: `Azure Service Bus Data Sender`; ACR: `AcrPull`; Azure SQL: `db_datareader`, `db_datawriter`; Azure Blob Storage: `Storage Blob Data Contributor` |
 | Container Apps Jobs | System-assigned | Key Vault: `secrets/get`; Azure SQL: `db_datareader`, `db_datawriter` |
 | Azure Functions | System-assigned | Key Vault: `secrets/get`; Service Bus: `Azure Service Bus Data Receiver`; Azure SQL: `db_datawriter`; Azure Blob Storage: `Storage Blob Data Contributor` |
 
 > **Blob Storage access (Issue #1, 2026-03-01):** SAS tokens have been replaced with `Storage Blob Data Contributor` RBAC assignments on the Container App managed identities. All blob operations use `DefaultAzureCredential` via the `Aspire.Azure.Storage.Blobs` integration package. SAS token generation and the `Storage-ConnectionString` Key Vault secret should be removed once all environments confirm MI-based access. RBAC assignments are managed by the `blob-storage-rbac` Terraform module. See [GitHub Issue #1](https://github.com/TaleLearnCode/CFPCompass-squad/issues/1).
+
+> **Azure SQL access (Issue #2, 2026-03-02):** `AzureSql-ConnectionString` has been removed from Key Vault. All four services authenticate to Azure SQL via Entra Managed Identity. The EF Core connection string uses `Authentication=Active Directory Managed Identity` — no username or password. SQL database roles (`db_datareader`, `db_datawriter`) are granted via the `azure-sql-rbac` Terraform module (`null_resource` + `sqlcmd` local-exec). See [GitHub Issue #2](https://github.com/TaleLearnCode/CFPCompass-squad/issues/2).
 
 **Key Vault references in Container Apps:** Environment variables in Container Apps are configured as Key Vault references (`@Microsoft.KeyVault(SecretUri=...)`) rather than plain values. At runtime, the Container Apps runtime resolves secrets directly from Key Vault using the app's managed identity.
 

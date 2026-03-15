@@ -140,16 +140,15 @@ CFP Compass uses **Azure Managed Identity** as the primary credential mechanism 
 
 | Service | Identity Type | Access Target |
 |---------|--------------|--------------|
-| Container App (Web) | System-assigned managed identity | Key Vault (secrets read), Azure Blob Storage (`Storage Blob Data Reader`) |
-| Container App (API) | System-assigned managed identity | Key Vault (secrets read), Service Bus (send), ACR (pull), Azure Blob Storage (`Storage Blob Data Contributor`) |
-| Azure Functions | System-assigned managed identity | Key Vault (secrets read), Service Bus (listen), Azure SQL (write), Azure Blob Storage (`Storage Blob Data Contributor`) |
-| Container Apps Jobs | System-assigned managed identity | Key Vault (secrets read), Azure SQL (read/write) |
+| Container App (Web) | System-assigned managed identity | Key Vault (secrets read), Azure SQL (`db_datareader`, `db_datawriter`), Azure Blob Storage (`Storage Blob Data Reader`) |
+| Container App (API) | System-assigned managed identity | Key Vault (secrets read), Service Bus (send), ACR (pull), Azure SQL (`db_datareader`, `db_datawriter`), Azure Blob Storage (`Storage Blob Data Contributor`) |
+| Azure Functions | System-assigned managed identity | Key Vault (secrets read), Service Bus (listen), Azure SQL (`db_datawriter`), Azure Blob Storage (`Storage Blob Data Contributor`) |
+| Container Apps Jobs | System-assigned managed identity | Key Vault (secrets read), Azure SQL (`db_datareader`, `db_datawriter`) |
 
 **Key Vault secret inventory:**
 
 | Secret | Purpose |
 |--------|---------|
-| `AzureSql-ConnectionString` | Database connection |
 | `Redis-ConnectionString` | Cache connection |
 | `ServiceBus-ConnectionString` | Service Bus connection |
 | `ACS-ConnectionString` | Email service |
@@ -161,6 +160,8 @@ CFP Compass uses **Azure Managed Identity** as the primary credential mechanism 
 | `Jwt-SigningKey` | JWT signing for email tokens |
 | `Turnstile-SiteKey` | Cloudflare Turnstile site key |
 | `Turnstile-SecretKey` | Cloudflare Turnstile secret key |
+
+> **Azure SQL:** Target state is **Managed Identity–only** access. All four services (Web, API, Jobs, Functions) authenticate to Azure SQL via Entra Managed Identity; the EF Core connection string uses `Authentication=Active Directory Managed Identity` — no username or password. `AzureSql-ConnectionString` is no longer required by Web/API/Jobs/Functions and is being phased out of Key Vault (cleanup pending; ADR-001 still reflects the earlier Key Vault–stored connection string approach). SQL database roles (`db_datareader`, `db_datawriter`) are granted to each service's managed identity via the `azure-sql-rbac` Terraform module. See Issue #2.
 
 > **Blob Storage:** `Storage-ConnectionString` is **not** stored in Key Vault. Blob Storage access is granted via Azure RBAC (Managed Identity) — the storage account name is a non-secret value stored in **Azure App Configuration** as `Storage:AccountName` with per-environment labels. `BlobServiceClient` is initialised with `DefaultAzureCredential` and the account URL (`https://{accountName}.blob.core.windows.net`). See Issue #1 and `.squad/agents/parker/blob-storage-mi-plan.md`.
 
