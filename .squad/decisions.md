@@ -1296,21 +1296,17 @@ This documentation update supports the implementation work tracked in ADR-015, w
 
 `CfpCompass.AppHost` pulls in `KubernetesClient 15.0.1` as a transitive dependency via Aspire.Hosting. It has a known **moderate severity** vulnerability (GHSA-w7r3-mgwf-4mqq). This is pre-existing and non-blocking, but the team should track it. When `KubernetesClient` releases a patched version compatible with Aspire 9.x, AppHost should be updated.
 
-## CI: No Test Workflow Yet
+## CI: Build, Unit Test, and Integration Test Workflow
 
-`squad-ci.yml` is a placeholder stub — it only runs `echo "No build commands configured"`. There is **no `dotnet test` step**. This needs to be addressed as a separate task.
+`squad-ci.yml` runs two jobs on push/PR to `main`:
 
-When CI is configured, follow Kane's guidance:
-- Integration tests require Docker (Azurite container)
-- Use `ubuntu-latest` (Docker available by default)
-- Separate fast unit tests from integration tests:
-  ```yaml
-  - name: Run unit tests
-    run: dotnet test CFPCompass.sln --filter "Category!=Integration"
+1. **build-and-unit-test** — restores, builds, and runs all non-integration tests (`--filter "Category!=Integration"`)
+2. **integration-test** — runs integration tests (`--filter "Category=Integration"`) against an Azurite emulator started via Docker in the workflow
 
-  - name: Run integration tests
-    run: dotnet test tests/CfpCompass.Api.Tests/ --filter "Category=Integration"
-  ```
+When adding new integration tests, follow Kane's guidance:
+- Integration tests require Azurite (started via Docker in CI — see `.github/workflows/squad-ci.yml`)
+- Tag integration tests with `[Trait("Category", "Integration")]`
+- Tag unit tests without that trait (they run by default in the first job)
 
 ## Naming Note for Team
 

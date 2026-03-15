@@ -37,12 +37,40 @@ resource "null_resource" "sql_role_grant" {
   provisioner "local-exec" {
     # sqlcmd uses the runner's Azure AD identity (DefaultAzureCredential via --authentication-method=ActiveDirectoryDefault).
     # The IF-NOT-EXISTS guards make this idempotent across repeated applies.
+    # Input validation rejects control characters; single quotes and brackets are escaped before
+    # interpolation into the T-SQL query to prevent injection via principal display names.
     command = <<-SHELL
+      set -euo pipefail
+
+      principal_raw="${each.value}"
+
+      # Reject control characters that could corrupt the SQL batch
+      if printf '%s' "$principal_raw" | LC_ALL=C grep -qP '[[:cntrl:]]'; then
+        echo "Invalid principal display name (contains control characters): $principal_raw" >&2
+        exit 1
+      fi
+
+      # Escape for T-SQL string literal: ' -> ''
+      principal_literal="$${principal_raw//\'/\'\'}"
+
+      # Escape for bracket-delimited identifier: ] -> ]]
+      principal_identifier="$${principal_raw//]/]]}"
+
+      sql_query=$(cat <<-SQL
+        IF NOT EXISTS (SELECT 1 FROM sys.database_principals WHERE name = N'$${principal_literal}')
+          BEGIN CREATE USER [$${principal_identifier}] FROM EXTERNAL PROVIDER END;
+        IF IS_ROLEMEMBER('db_datareader', '$${principal_literal}') = 0
+          BEGIN ALTER ROLE db_datareader ADD MEMBER [$${principal_identifier}] END;
+        IF IS_ROLEMEMBER('db_datawriter', '$${principal_literal}') = 0
+          BEGIN ALTER ROLE db_datawriter ADD MEMBER [$${principal_identifier}] END;
+SQL
+      )
+
       sqlcmd \
         -S "${var.sql_server_fqdn}" \
         -d "${var.database_name}" \
         --authentication-method=ActiveDirectoryDefault \
-        -Q "IF NOT EXISTS (SELECT 1 FROM sys.database_principals WHERE name = N'${each.value}') BEGIN CREATE USER [${each.value}] FROM EXTERNAL PROVIDER END; IF IS_ROLEMEMBER('db_datareader', '${each.value}') = 0 BEGIN ALTER ROLE db_datareader ADD MEMBER [${each.value}] END; IF IS_ROLEMEMBER('db_datawriter', '${each.value}') = 0 BEGIN ALTER ROLE db_datawriter ADD MEMBER [${each.value}] END;"
+        -Q "$${sql_query}"
     SHELL
     interpreter = ["/bin/bash", "-c"]
   }

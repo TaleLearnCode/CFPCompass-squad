@@ -49,6 +49,7 @@ jobs:
 
   integration-test:
     runs-on: ubuntu-latest
+    # ubuntu-latest includes Docker by default — required for Azurite container
     needs: build-and-unit-test
     steps:
       - uses: actions/checkout@v4
@@ -68,6 +69,25 @@ jobs:
 
       - name: Restore dependencies
         run: dotnet restore CFPCompass.sln
+
+      - name: Start Azurite emulator
+        run: |
+          docker run -d \
+            --name azurite \
+            -p 10000:10000 \
+            -p 10001:10001 \
+            -p 10002:10002 \
+            mcr.microsoft.com/azure-storage/azurite
+          # Wait for Azurite Blob service to be ready (max 30 seconds)
+          for i in $(seq 1 30); do
+            if curl -sf http://127.0.0.1:10000/ > /dev/null 2>&1; then
+              echo "Azurite ready after ${i}s"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "Azurite did not become ready within 30 seconds" >&2
+          exit 1
 
       - name: Run integration tests
         run: >

@@ -1,8 +1,10 @@
+using System.Net.Sockets;
 using System.Text;
 using Azure.Storage.Blobs;
 using CfpCompass.Api.Services;
 using Microsoft.Extensions.Logging;
 using Xunit;
+using Xunit.Sdk;
 
 namespace CfpCompass.Api.Tests.Services;
 
@@ -24,9 +26,28 @@ public sealed class BlobStorageServiceIntegrationTests : IAsyncLifetime
     private BlobServiceClient _blobServiceClient = null!;
     private BlobStorageService _sut = null!;
     private ILogger<BlobStorageService> _logger = null!;
+    private string? _skipReason;
+
+    private void SkipIfAzuriteUnavailable()
+    {
+        if (_skipReason is not null)
+            throw new SkipException(_skipReason);
+    }
 
     public async Task InitializeAsync()
     {
+        // Check if Azurite is reachable; if not, skip all tests in this class
+        try
+        {
+            using var tcp = new TcpClient();
+            await tcp.ConnectAsync("127.0.0.1", 10000);
+        }
+        catch (SocketException)
+        {
+            _skipReason = "Azurite is not running on 127.0.0.1:10000 — skipping integration tests.";
+            return;
+        }
+
         _blobServiceClient = new BlobServiceClient(AzuriteConnectionString);
         _logger = new LoggerFactory().CreateLogger<BlobStorageService>();
         _sut = new BlobStorageService(_blobServiceClient, _logger);
@@ -38,6 +59,9 @@ public sealed class BlobStorageServiceIntegrationTests : IAsyncLifetime
 
     public async Task DisposeAsync()
     {
+        if (_blobServiceClient is null)
+            return;
+
         // Cleanup test container after each test
         var containerClient = _blobServiceClient.GetBlobContainerClient(TestContainerName);
         await containerClient.DeleteIfExistsAsync();
@@ -46,6 +70,7 @@ public sealed class BlobStorageServiceIntegrationTests : IAsyncLifetime
     [Fact]
     public async Task UploadAsync_ReturnsPlainUri_WithoutSasParameters()
     {
+        SkipIfAzuriteUnavailable();
         // Arrange
         var blobName = $"test-upload-{Guid.NewGuid()}.txt";
         var content = "Integration test content for upload operation";
@@ -75,6 +100,7 @@ public sealed class BlobStorageServiceIntegrationTests : IAsyncLifetime
     [Fact]
     public async Task DownloadAsync_RetrievesUploadedContent_WithIntegrity()
     {
+        SkipIfAzuriteUnavailable();
         // Arrange
         var blobName = $"test-download-{Guid.NewGuid()}.txt";
         var originalContent = "Integration test content for download operation";
@@ -95,6 +121,7 @@ public sealed class BlobStorageServiceIntegrationTests : IAsyncLifetime
     [Fact]
     public async Task DeleteAsync_RemovesBlob_VerifiedByExists()
     {
+        SkipIfAzuriteUnavailable();
         // Arrange
         var blobName = $"test-delete-{Guid.NewGuid()}.txt";
         var content = "Integration test content for delete operation";
@@ -118,6 +145,7 @@ public sealed class BlobStorageServiceIntegrationTests : IAsyncLifetime
     [Fact]
     public async Task ExistsAsync_ReturnsFalse_WhenBlobDoesNotExist()
     {
+        SkipIfAzuriteUnavailable();
         // Arrange
         var nonExistentBlobName = $"non-existent-{Guid.NewGuid()}.txt";
 
@@ -131,6 +159,7 @@ public sealed class BlobStorageServiceIntegrationTests : IAsyncLifetime
     [Fact]
     public async Task UploadAsync_OverwritesExistingBlob_WithNewContent()
     {
+        SkipIfAzuriteUnavailable();
         // Arrange
         var blobName = $"test-overwrite-{Guid.NewGuid()}.txt";
         var originalContent = "Original content";
@@ -153,6 +182,7 @@ public sealed class BlobStorageServiceIntegrationTests : IAsyncLifetime
     [Fact]
     public async Task UploadAsync_HandlesLargeBinaryContent()
     {
+        SkipIfAzuriteUnavailable();
         // Arrange — Create 1MB binary content
         var blobName = $"test-large-{Guid.NewGuid()}.bin";
         var largeContent = new byte[1024 * 1024]; // 1 MB
@@ -168,8 +198,9 @@ public sealed class BlobStorageServiceIntegrationTests : IAsyncLifetime
 
         // Assert — Verify upload succeeded and content integrity
         var downloadedStream = await _sut.DownloadAsync(TestContainerName, blobName);
-        var downloadedContent = new byte[largeContent.Length];
-        await downloadedStream.ReadAsync(downloadedContent.AsMemory(0, downloadedContent.Length));
+        using var ms = new MemoryStream();
+        await downloadedStream.CopyToAsync(ms);
+        var downloadedContent = ms.ToArray();
         
         Assert.Equal(largeContent, downloadedContent);
     }

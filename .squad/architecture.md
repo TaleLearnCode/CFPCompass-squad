@@ -882,9 +882,9 @@ Internet
 | `Turnstile-SiteKey` | Cloudflare Turnstile site key (public, stored centrally for config) |
 | `Turnstile-SecretKey` | Cloudflare Turnstile secret key (server-side verification) |
 
-> **Not in Key Vault:** `AzureSql-ConnectionString` and `Storage-ConnectionString` are not stored in Key Vault. Both Azure SQL and Blob Storage are accessed exclusively via Entra Managed Identity — `AzureSql-ConnectionString` was removed (Issue #2); `Storage-ConnectionString` was never added (Issue #1).
+> **Target state / migration note:** `AzureSql-ConnectionString` and `Storage-ConnectionString` are **not** stored in Key Vault in the active architecture. Both Azure SQL and Blob Storage are accessed exclusively via Entra Managed Identity. ADR-001 still documents storing `AzureSql-ConnectionString` in Key Vault for legacy password-based SQL auth — that secret and the ADR-001 reference are being decommissioned (Issue #2) and must be removed from any remaining environments during migration; `Storage-ConnectionString` was never added (Issue #1).
 
-**Access method:** Azure Managed Identity on Container Apps → Key Vault access policies. No secrets in app config or environment variables at runtime.
+**Access method (current/target):** Azure Managed Identity on Container Apps → Key Vault access policies. No secrets in app config or environment variables at runtime for Azure SQL or Blob Storage.
 
 ### Container Registry
 

@@ -83,7 +83,7 @@ GitHub Repository
 ### Terraform Module Structure
 
 ```
-infra/
+infrastructure/terraform/
 ├── main.tf                    # Root module — calls all child modules in order
 ├── variables.tf               # Input variables: environment, region, SKUs, tags
 ├── outputs.tf                 # Outputs: URLs, resource IDs, connection strings (non-secret)
@@ -120,14 +120,16 @@ infra/
     ├── dev/
     │   ├── main.tf              # Dev module instantiation with dev-specific overrides
     │   ├── terraform.tfvars     # Dev variable values (SKU overrides, region, tags)
-    │   └── blob-storage-rbac.tf # Blob Storage RBAC caller for dev environment (Issue #1)
-│   └── azure-sql-rbac.tf    # Azure SQL MI role grants caller for dev environment (Issue #2)
+    │   ├── blob-storage-rbac.tf # Blob Storage RBAC caller for dev environment (Issue #1)
+    │   └── azure-sql-rbac.tf    # Azure SQL MI role grants caller for dev environment (Issue #2)
     ├── staging/
     │   ├── main.tf
-    │   └── terraform.tfvars
+    │   ├── terraform.tfvars
+    │   └── azure-sql-rbac.tf    # Azure SQL MI role grants caller for staging (placeholder; activate when staging is provisioned)
     └── prod/
         ├── main.tf
-        └── terraform.tfvars
+        ├── terraform.tfvars
+        └── azure-sql-rbac.tf    # Azure SQL MI role grants caller for prod (placeholder; activate when prod is provisioned)
 ```
 
 **State management:** Remote state is stored in `stcfpcompasstfstate` Storage Account (`rg-cfpcompass-shared`). Each environment has a separate state file (`dev.tfstate`, `staging.tfstate`, `prod.tfstate`). State locking uses Azure Blob lease to prevent concurrent `terraform apply` runs.
